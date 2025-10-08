@@ -191,6 +191,10 @@ extern "C"
         CrSceneHandle scene,
         unsigned int *outOffset);
 
+    CRMPM_C_API void CrResetParticleObject(
+        CrParticleObjectHandle particleObject
+    );
+
     CRMPM_C_API void CrAddShapeToScene(
         CrShapeHandle shape,
         CrSceneHandle scene);

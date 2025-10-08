@@ -281,6 +281,13 @@ void CrAddParticleObjectToScene(
     *outOffset = cppParticleObject->getIndexOffset();
 }
 
+void CrResetParticleObject(
+    CrParticleObjectHandle particleObject)
+{
+    crmpm::ParticleObject *cppParticleObject = static_cast<crmpm::ParticleObject *>(particleObject);
+    cppParticleObject->reset();
+}
+
 void CrAddShapeToScene(
     CrShapeHandle shape,
     CrSceneHandle scene)
