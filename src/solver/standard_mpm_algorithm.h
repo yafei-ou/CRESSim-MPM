@@ -172,7 +172,7 @@ namespace crmpm
         // Current volume
         float currentVolume = initialVolume * gradientDeformationTensor.determinant();
 
-        // Stress
+        // Kirchhoff stress
         computeStress(particleMaterialProperties0, particleMaterialType, gradientDeformationTensor, Mat3x3f(), currentVolume, initialVolume, stress);
 
         for (int i = 0; i < 3; i++)
@@ -195,7 +195,7 @@ namespace crmpm
                                          weights(i, 0) * weights(j, 1) * weightGradients(k, 2));
 
                     const Vec3f externalForce = gravity * (weight * mass);
-                    const Vec3f internalForce = (stress * weightGradient) * (-currentVolume);
+                    const Vec3f internalForce = (stress * weightGradient) * (-initialVolume); // Note: the stress is Kirchhoff
 
                     if constexpr (IsCuda)
                     {

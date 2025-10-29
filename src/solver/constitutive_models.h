@@ -71,7 +71,6 @@ namespace crmpm
         const Mat3x3f b = gradientDeformationTensor * gradientDeformationTensor.transpose(); // Left Cauchy-Green tensor
 
         // Convert to Kirchhoff stress
-        // Why not use Cauchy stress?
         particleStressTensor = mu * (b - Mat3x3f::Identity()) + Mat3x3f::Scalar(lambda * log(J)); // Convert to Kirchhoff stress
     }
 

@@ -184,7 +184,8 @@ namespace crmpm
         computeStress(particleMaterialProperties0, particleMaterialType, gradientDeformationTensor, particleAffineMomentum, currentVolume, initialVolume, stress);
 
         // MLS-MPM eqn 16 part one: volume * M^(-1) * stress, M is  1/4 * dx^(2)  for quadratic
-        const Mat3x3f V_M_stress_Increment = -integrationStepSize * 4 * invCellSize * invCellSize * currentVolume * stress;
+        // Note: the stress is Kirchhoff
+        const Mat3x3f V_M_stress_Increment = -integrationStepSize * 4 * invCellSize * invCellSize * initialVolume * stress;
         const float particleMass = particlePositionMass.w;
         const Mat3x3f affine = V_M_stress_Increment + particleAffineMomentum * particleMass;
 
