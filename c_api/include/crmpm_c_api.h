@@ -95,6 +95,26 @@ extern "C"
         void *velocity;     // float4 (16-byte aligned)
     } CrParticleData;
 
+    /* Enums */
+
+    typedef enum CrSceneDataDirtyFlags {
+        CR_SCENE_DATA_DIRTY_NONE                 = 0,
+        CR_SCENE_DATA_DIRTY_PARTICLE_POS_MASS    = 1 << 0,
+        CR_SCENE_DATA_DIRTY_PARTICLE_VELOCITY    = 1 << 1,
+        CR_SCENE_DATA_DIRTY_PARTICLE_MATERIAL0   = 1 << 2,
+        CR_SCENE_DATA_DIRTY_PARTICLE_TYPE        = 1 << 3,
+        CR_SCENE_DATA_DIRTY_NUM_PARTICLES        = 1 << 4,
+        CR_SCENE_DATA_DIRTY_COMPUTE_INITIAL_DATA = 1 << 5,
+
+        CR_SCENE_DATA_DIRTY_ALL =
+            CR_SCENE_DATA_DIRTY_PARTICLE_POS_MASS |
+            CR_SCENE_DATA_DIRTY_PARTICLE_VELOCITY |
+            CR_SCENE_DATA_DIRTY_PARTICLE_MATERIAL0 |
+            CR_SCENE_DATA_DIRTY_PARTICLE_TYPE |
+            CR_SCENE_DATA_DIRTY_NUM_PARTICLES |
+            CR_SCENE_DATA_DIRTY_COMPUTE_INITIAL_DATA
+    } CrSceneDataDirtyFlags;
+
     /* Engine management */
 
     CRMPM_C_API void CrInitializeEngine(
@@ -128,6 +148,8 @@ extern "C"
         CrShapeHandle shape,
         CrVec4f *outForce,
         CrVec4f *outTorque);
+
+    CRMPM_C_API void CrSceneMarkDirty(CrSceneHandle scene, CrSceneDataDirtyFlags flags);
 
     CRMPM_C_API void CrSyncSceneDataIfNeeded(
         CrSceneHandle scene);

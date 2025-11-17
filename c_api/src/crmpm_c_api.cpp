@@ -134,6 +134,13 @@ void CrGetShapeCouplingForceTorque(CrShapeHandle shape, CrVec4f *outForce, CrVec
     memcpy(outTorque, &cppShape->getShapeTorque(), sizeof(float4));
 }
 
+void CrSceneMarkDirty(CrSceneHandle scene, CrSceneDataDirtyFlags flags)
+{
+    crmpm::Scene *cppScene = static_cast<crmpm::Scene *>(scene);
+    cppScene->markDirty(static_cast<crmpm::SceneDataDirtyFlags>(flags));
+    return ;
+}
+
 void CrSyncSceneDataIfNeeded(CrSceneHandle scene)
 {
     crmpm::Scene *cppScene = static_cast<crmpm::Scene *>(scene);
