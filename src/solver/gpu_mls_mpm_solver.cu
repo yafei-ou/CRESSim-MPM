@@ -59,27 +59,27 @@ namespace crmpm
         dmParticleMaterialTypes = mParticleMaterialData->type;
 
         // GPU particle data
-        CR_CHECK_CUDA(cudaMalloc<float>(&dmParticleInitialVolume, mNumMaxParticles * sizeof(float)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleGradientDeformationTensorColumn0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleGradientDeformationTensorColumn1, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleGradientDeformationTensorColumn2, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleAffineMomentumColumn0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleAffineMomentumColumn1, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleAffineMomentumColumn2, mNumMaxParticles * sizeof(float4)));
+        CR_CHECK_CUDA(cudaMallocAsync<float>(&dmParticleInitialVolume, mNumMaxParticles * sizeof(float), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleGradientDeformationTensorColumn0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleGradientDeformationTensorColumn1, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleGradientDeformationTensorColumn2, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleAffineMomentumColumn0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleAffineMomentumColumn1, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleAffineMomentumColumn2, mNumMaxParticles * sizeof(float4), mCudaStream));
 
         // GPU node data
-        CR_CHECK_CUDA(cudaMalloc<float4>(&dmNodeMomentumVelocityMass, mNumNodes * sizeof(float4)));
+        CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmNodeMomentumVelocityMass, mNumNodes * sizeof(float4), mCudaStream));
 
         // Reset all GPU data to zero
-        CR_CHECK_CUDA(cudaMemset(dmParticleInitialVolume, 0, mNumMaxParticles * sizeof(float)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleGradientDeformationTensorColumn0, 0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleGradientDeformationTensorColumn1, 0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleGradientDeformationTensorColumn2, 0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleAffineMomentumColumn0, 0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleAffineMomentumColumn1, 0, mNumMaxParticles * sizeof(float4)));
-        CR_CHECK_CUDA(cudaMemset(dmParticleAffineMomentumColumn2, 0, mNumMaxParticles * sizeof(float4)));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleInitialVolume, 0, mNumMaxParticles * sizeof(float), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleGradientDeformationTensorColumn0, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleGradientDeformationTensorColumn1, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleGradientDeformationTensorColumn2, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleAffineMomentumColumn0, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleAffineMomentumColumn1, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmParticleAffineMomentumColumn2, 0, mNumMaxParticles * sizeof(float4), mCudaStream));
 
-        CR_CHECK_CUDA(cudaMemset(dmNodeMomentumVelocityMass, 0, mNumNodes * sizeof(float4)));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmNodeMomentumVelocityMass, 0, mNumNodes * sizeof(float4), mCudaStream));
     }
 
     void GpuMlsMpmSolver::computeInitialData(unsigned int numParticlesToCompute,
@@ -88,16 +88,15 @@ namespace crmpm
         // Initial P2G and G2P for particle volume
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((numParticlesToCompute + block.x - 1) / block.x);
-        mlsMpmComputeInitialGridMassKernel<<<grid, block>>>(numParticlesToCompute, indices, mGridBound.minimum,
+        mlsMpmComputeInitialGridMassKernel<<<grid, block, 0, mCudaStream>>>(numParticlesToCompute, indices, mGridBound.minimum,
                                                             mInvCellSize, mNumNodesPerDim, mCellVolume, dmParticlePositionMass,
                                                             dmParticleGradientDeformationTensorColumn0, dmParticleGradientDeformationTensorColumn1,
                                                             dmParticleGradientDeformationTensorColumn2, dmNodeMomentumVelocityMass);
-        mlsMpmComputeInitialVolumeKernel<<<grid, block>>>(numParticlesToCompute, indices, mGridBound.minimum,
+        mlsMpmComputeInitialVolumeKernel<<<grid, block, 0, mCudaStream>>>(numParticlesToCompute, indices, mGridBound.minimum,
                                                           mInvCellSize, mNumNodesPerDim, mCellVolume, dmParticlePositionMass,
                                                           dmNodeMomentumVelocityMass,
                                                           dmParticleGradientDeformationTensorColumn0, dmParticleGradientDeformationTensorColumn1,
                                                           dmParticleGradientDeformationTensorColumn2, dmParticleInitialVolume);
-        CR_CHECK_CUDA(cudaDeviceSynchronize());
     }
 
     float GpuMlsMpmSolver::step()
@@ -109,41 +108,31 @@ namespace crmpm
         return mIntegrationStepSize;
     }
 
-    void GpuMlsMpmSolver::fetchResults()
-    {
-        CR_CHECK_CUDA(cudaDeviceSynchronize());
-    }
-
     void GpuMlsMpmSolver::_release()
     {
         // Device
-        CR_CHECK_CUDA(cudaFree(dmParticleInitialVolume);)
-        CR_CHECK_CUDA(cudaFree(dmParticleGradientDeformationTensorColumn0));
-        CR_CHECK_CUDA(cudaFree(dmParticleGradientDeformationTensorColumn1));
-        CR_CHECK_CUDA(cudaFree(dmParticleGradientDeformationTensorColumn2));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleInitialVolume, mCudaStream);)
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleGradientDeformationTensorColumn0, mCudaStream));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleGradientDeformationTensorColumn1, mCudaStream));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleGradientDeformationTensorColumn2, mCudaStream));
 
-        CR_CHECK_CUDA(cudaFree(dmParticleAffineMomentumColumn0));
-        CR_CHECK_CUDA(cudaFree(dmParticleAffineMomentumColumn1));
-        CR_CHECK_CUDA(cudaFree(dmParticleAffineMomentumColumn2));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleAffineMomentumColumn0, mCudaStream));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleAffineMomentumColumn1, mCudaStream));
+        CR_CHECK_CUDA(cudaFreeAsync(dmParticleAffineMomentumColumn2, mCudaStream));
 
-        CR_CHECK_CUDA(cudaFree(dmNodeMomentumVelocityMass));
-    }
-
-    ParticleData &GpuMlsMpmSolver::getParticleData()
-    {
-        return *mParticleData;
+        CR_CHECK_CUDA(cudaFreeAsync(dmNodeMomentumVelocityMass, mCudaStream));
     }
 
     void GpuMlsMpmSolver::resetGrid()
     {
-        CR_CHECK_CUDA(cudaMemset(dmNodeMomentumVelocityMass, 0, mNumNodes * sizeof(Vec3f)));
+        CR_CHECK_CUDA(cudaMemsetAsync(dmNodeMomentumVelocityMass, 0, mNumNodes * sizeof(Vec3f), mCudaStream));
     }
 
     void GpuMlsMpmSolver::particleToGrid()
     {
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((mNumActiveParticles + block.x - 1) / block.x);
-        mlsMpmParticleToGridKernel<<<grid, block>>>(
+        mlsMpmParticleToGridKernel<<<grid, block, 0, mCudaStream>>>(
             mIntegrationStepSize, mGravity, mGridBound.minimum, mInvCellSize, mCellSize, mNumNodesPerDim,
             mNumActiveParticles, mActiveMask,
             dmParticlePositionMass, dmParticleInitialVolume,
@@ -165,7 +154,7 @@ namespace crmpm
     {
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((mNumNodes + block.x - 1) / block.x);
-        mlsMpmUpdateGridKernel<<<grid, block>>>(
+        mlsMpmUpdateGridKernel<<<grid, block, 0, mCudaStream>>>(
             mIntegrationStepSize,
             mNumNodes,
             mGridBound.minimum,
@@ -183,7 +172,7 @@ namespace crmpm
     {
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((mNumActiveParticles + block.x - 1) / block.x);
-        mlsMpmGridToParticleKernel<<<grid, block>>>(
+        mlsMpmGridToParticleKernel<<<grid, block, 0, mCudaStream>>>(
             mGridBound.minimum,
             mGridBound.maximum,
             mInvCellSize,

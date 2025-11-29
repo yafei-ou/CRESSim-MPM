@@ -45,10 +45,10 @@
 
 #include "constants.h"
 #include <cassert>
-#include <unordered_map>
 #include <utility>
 #include <algorithm>
 
+#include "type_aliases.h"
 #include "preprocessor.h"
 #include "bounds3.h"
 #include "array.h"
@@ -57,13 +57,6 @@
 
 namespace crmpm
 {
-    // This is simply an alias for std::unordered_map.
-    template <typename _Key, typename _Tp, class _Hasher = std::hash<_Key>>
-    using HashMap = std::unordered_map<_Key, _Tp, _Hasher>;
-
-    template <typename T1, typename T2>
-    using Pair = std::pair<T1, T2>;
-
     struct AABBTreeNode
     {
     public:

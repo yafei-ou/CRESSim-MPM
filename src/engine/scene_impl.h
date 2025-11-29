@@ -33,6 +33,7 @@
 #define CR_SCENE_IMPL_H
 
 #include "scene.h"
+#include "simulation_status.h"
 #include "preprocessor.h"
 #include "ref_counted.h"
 #include "particle_data.h"
@@ -41,16 +42,15 @@
 #include "single_thread_manager.h"
 #include "gpu_data_dirty_flags.h"
 
+
+// Forward declare CUstream_st and cudaStream_t
+struct CUstream_st;
+typedef CUstream_st* cudaStream_t;
+
 namespace crmpm
 {
     class ShapeImpl;
     class SimulationFactoryImpl;
-
-    enum class SimulationStatus : unsigned short
-    {
-        eBusy,
-        eIdle,
-    };
 
     class SceneImpl : public Scene, public RefCounted
     {
@@ -61,17 +61,7 @@ namespace crmpm
          */
         void advance(float dt) override; // simulation_factory.h must be included.
 
-        void fetchResults() override
-        {
-            if (mStatus != SimulationStatus::eBusy)
-            {
-                CR_DEBUG_LOG_WARNING("%s", "Scene->advance() has not been called");
-                return;
-            }
-
-            mThreadManager.waitForIdle();
-            mStatus = SimulationStatus::eIdle;
-        }
+        void fetchResults() override;
 
         CR_FORCE_INLINE unsigned int getMaxNumParticles() const override
         {
@@ -96,6 +86,11 @@ namespace crmpm
         CR_FORCE_INLINE ParticleData &getParticleData() override
         {
             return mCpuParticleData;
+        }
+
+        CR_FORCE_INLINE int getParticleDataGlobalOffset() override
+        {
+            return mParticleDataOffset;
         }
 
         /**
@@ -145,8 +140,15 @@ namespace crmpm
         void syncDataIfNeeded() override;
 
     protected:
-        SceneImpl(unsigned int maxNumParticles, unsigned int shapeCapacity)
+        SceneImpl(unsigned int maxNumParticles,
+                  unsigned int shapeCapacity,
+                  float4 *particlePositionMass,
+                  Vec3f *particleVelocity,
+                  int particleDataOffset)
             : mMaxNumParticles(maxNumParticles),
+              mParticlePositionMass(particlePositionMass + particleDataOffset),
+              mParticleVelocity(particleVelocity + particleDataOffset),
+              mParticleDataOffset(particleDataOffset),
               mNumAllocatedParticles(0),
               mCpuParticleData(maxNumParticles),
               mCpuParticleMaterialData(maxNumParticles),
@@ -159,16 +161,19 @@ namespace crmpm
 
         ~SceneImpl() = default;
 
-        void initialize(int maxNumParticles);
+        void initialize();
 
         CR_FORCE_INLINE void setFactory(SimulationFactoryImpl &factory) { mFactory = &factory; }
 
-        CR_FORCE_INLINE void setSolver(MpmSolverBase &solver, bool isGpu)
-        {
-            mIsGpu = isGpu;
-            mSolver = &solver;
-            mSolver->setNumShapes(0);
-        }
+        void setSolver(MpmSolverBase &solver, bool isGpu);
+
+        void beforeAdvance();
+
+        void afterAdvance();
+
+        SimulationStatus getSimulationStatus();
+
+        void setSimulationStatus(SimulationStatus status);
 
     private:
         SimulationFactoryImpl *mFactory;
@@ -196,8 +201,9 @@ namespace crmpm
         ParticleData mCpuParticleData;
         ParticleMaterialData mCpuParticleMaterialData;
 
-        float4 *mParticlePositionMass;
-        Vec3f *mParticleVelocity;
+        int mParticleDataOffset;
+        float4 *mParticlePositionMass; // after applying offset
+        Vec3f *mParticleVelocity;      // after applying offset
         float4 *mParticleMaterialPropertiesGroup1;
         ParticleMaterialType *mParticleMaterialTypes;
 
@@ -218,6 +224,9 @@ namespace crmpm
         // Solver
         MpmSolverBase *mSolver;
 
+        // CUDA stream
+        cudaStream_t mCudaStream;
+
         // A separate thread for simulation solving
         SingleThreadManager mThreadManager;
         Task mAdvanceTaskFn;
@@ -225,8 +234,6 @@ namespace crmpm
         void _release() override;
 
         void _advanceTaskFn(void *data);
-
-        void beforeAdvance();
 
         friend class SimulationFactoryImpl;
     };

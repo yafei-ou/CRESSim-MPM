@@ -78,7 +78,10 @@ namespace crmpm
         virtual void computeInitialData(unsigned int numParticlesToCompute,
                                         const unsigned int *CR_RESTRICT indices) override = 0;
 
-        virtual ParticleData &getParticleData() override = 0;
+        ParticleData &getParticleData() override final
+        {
+            return *mParticleData;
+        }
 
         void bindParticleData(ParticleData &particleData) override
         {

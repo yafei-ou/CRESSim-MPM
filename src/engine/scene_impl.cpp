@@ -35,57 +35,46 @@
 #include "simulation_factory_impl.h"
 #include "grow_data_block.cuh"
 #include "material_data.h"
+#include "mpm_solver_gpu.h"
 
 namespace crmpm
 {
-    void SceneImpl::initialize(int maxNumParticles)
+    void SceneImpl::initialize()
     {
         // Initialize a separate thread
         mThreadManager.start();
 
-        if (mIsGpu)
-        {
-            // Use pinned host memory for particle position/mass and velocity
-            // Material data should not be frequently changed so we don't use pinned memory for them
-            CR_CHECK_CUDA(cudaMallocHost<float4>(&mParticlePositionMass, maxNumParticles * sizeof(float4)));
-            CR_CHECK_CUDA(cudaMallocHost<Vec3f>(&mParticleVelocity, maxNumParticles * sizeof(Vec3f)));
-        }
-        else
-        {
-            mParticlePositionMass = new float4[maxNumParticles];
-            mParticleVelocity = new Vec3f[maxNumParticles];
-        }
         mCpuParticleData.positionMass = mParticlePositionMass;
         mCpuParticleData.velocity = mParticleVelocity;
 
-        mParticleMaterialTypes = new ParticleMaterialType[maxNumParticles];
-        mParticleMaterialPropertiesGroup1 = new float4[maxNumParticles];
+        mParticleMaterialTypes = new ParticleMaterialType[mMaxNumParticles];
+        mParticleMaterialPropertiesGroup1 = new float4[mMaxNumParticles];
         mCpuParticleMaterialData.params0 = mParticleMaterialPropertiesGroup1;
         mCpuParticleMaterialData.type = mParticleMaterialTypes;
 
-        mActiveParticleMask = new unsigned char[maxNumParticles];
+        mActiveParticleMask = new unsigned char[mMaxNumParticles];
 
         // For GPU solvers
         if (mIsGpu)
         {
-            CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticlePositionMass, maxNumParticles * sizeof(float4)));
-            CR_CHECK_CUDA(cudaMalloc<Vec3f>(&dmParticleVelocity, maxNumParticles * sizeof(Vec3f)));
-            CR_CHECK_CUDA(cudaMalloc<float4>(&dmParticleMaterialPropertiesGroup1, maxNumParticles * sizeof(float4)));
-            CR_CHECK_CUDA(cudaMalloc<ParticleMaterialType>(&dmParticleMaterialTypes, maxNumParticles * sizeof(ParticleMaterialType)));
+            CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticlePositionMass, mMaxNumParticles * sizeof(float4), mCudaStream));
+            CR_CHECK_CUDA(cudaMallocAsync<Vec3f>(&dmParticleVelocity, mMaxNumParticles * sizeof(Vec3f), mCudaStream));
+            CR_CHECK_CUDA(cudaMallocAsync<float4>(&dmParticleMaterialPropertiesGroup1, mMaxNumParticles * sizeof(float4), mCudaStream));
+            CR_CHECK_CUDA(cudaMallocAsync<ParticleMaterialType>(&dmParticleMaterialTypes, mMaxNumParticles * sizeof(ParticleMaterialType), mCudaStream));
 
-            CR_CHECK_CUDA(cudaMemset(dmParticlePositionMass, 0, maxNumParticles * sizeof(float4)));
-            CR_CHECK_CUDA(cudaMemset(dmParticleVelocity, 0, maxNumParticles * sizeof(Vec3f)));
-            CR_CHECK_CUDA(cudaMemset(dmParticleMaterialPropertiesGroup1, 0, maxNumParticles * sizeof(float4)));
-            CR_CHECK_CUDA(cudaMemset(dmParticleMaterialTypes, 0, maxNumParticles * sizeof(ParticleMaterialType)));
+            CR_CHECK_CUDA(cudaMemsetAsync(dmParticlePositionMass, 0, mMaxNumParticles * sizeof(float4), mCudaStream));
+            CR_CHECK_CUDA(cudaMemsetAsync(dmParticleVelocity, 0, mMaxNumParticles * sizeof(Vec3f), mCudaStream));
+            CR_CHECK_CUDA(cudaMemsetAsync(dmParticleMaterialPropertiesGroup1, 0, mMaxNumParticles * sizeof(float4), mCudaStream));
+            CR_CHECK_CUDA(cudaMemsetAsync(dmParticleMaterialTypes, 0, mMaxNumParticles * sizeof(ParticleMaterialType), mCudaStream));
 
             mGpuParticleData.positionMass = dmParticlePositionMass;
             mGpuParticleData.velocity = dmParticleVelocity;
             mGpuParticleMaterialData.params0 = dmParticleMaterialPropertiesGroup1;
             mGpuParticleMaterialData.type = dmParticleMaterialTypes;
 
-            CR_CHECK_CUDA(cudaMalloc<int>(&dmShapeIds, mShapeCapacity * sizeof(int)));
-            CR_CHECK_CUDA(cudaMalloc<unsigned char>(&dmActiveParticleMask, maxNumParticles * sizeof(unsigned char)));
-            CR_CHECK_CUDA(cudaMalloc<unsigned int>(&dmComputeInitialDataIndices, maxNumParticles * sizeof(int)));
+            CR_CHECK_CUDA(cudaMallocAsync<int>(&dmShapeIds, mShapeCapacity * sizeof(int), mCudaStream));
+            CR_CHECK_CUDA(cudaMallocAsync<unsigned char>(&dmActiveParticleMask, mMaxNumParticles * sizeof(unsigned char), mCudaStream));
+            CR_CHECK_CUDA(cudaMallocAsync<unsigned int>(&dmComputeInitialDataIndices, mMaxNumParticles * sizeof(int), mCudaStream));
 
             mSolver->bindParticleData(mGpuParticleData);
             mSolver->bindParticleMaterials(mGpuParticleMaterialData);
@@ -105,52 +94,44 @@ namespace crmpm
 
     void SceneImpl::advance(float dt)
     {
-        if (mStatus == SimulationStatus::eIdle)
+        // Only advance if both the scene and the factory (advanceAll) are idle
+        if (mStatus == SimulationStatus::eIdle &&
+            mFactory->getSimulationStatus() == SimulationStatus::eIdle)
         {
             mThreadManager.submitTask(mAdvanceTaskFn, &dt, sizeof(float));
             mStatus = SimulationStatus::eBusy;
         }
         else
         {
-            CR_DEBUG_LOG_WARNING("%s", "fetchResults() has not been called after advance().");
+            CR_DEBUG_LOG_WARNING("%s", "Results have not been fetched after advance() or advanceAll().");
         }
     }
 
-    void SceneImpl::_advanceTaskFn(void *data)
+    void SceneImpl::fetchResults()
     {
-        beforeAdvance();
-        float dt = *((float *)data);
-        mFactory->beforeSceneAdvance(); // Note: a second scene advance will not trigger copy again.
-        float timeAdvanced = 0;
-        while (timeAdvanced < dt)
+        if (mFactory->getSimulationStatus() == SimulationStatus::eBusy)
         {
-            timeAdvanced += mSolver->step();
+            // If the factory is busy due to advanceAll(),
+            // all scenes must be busy.
+            CR_DEBUG_LOG_WARNING("%s", "SimulationFactory->advanceAll() was called. All results will be fetched.");
+            mFactory->fetchResultsAll();
         }
-
-        mSolver->fetchResults();
-
-        if (mIsGpu)
+        else if (mStatus == SimulationStatus::eBusy)
         {
-            // GPU->CPU
-            CR_CHECK_CUDA(cudaMemcpy(mCpuParticleData.positionMass, dmParticlePositionMass, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyDeviceToHost));
-            CR_CHECK_CUDA(cudaMemcpy(mCpuParticleData.velocity, dmParticleVelocity, mMaxNumParticles * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyDeviceToHost));
+            mThreadManager.waitForIdle();
+            mStatus = SimulationStatus::eIdle;
         }
-
-        for (ShapeImpl *shape : mShapes)
+        else
         {
-            shape->resetKinematicTarget();
+            CR_DEBUG_LOG_WARNING("%s", "Scene->advance() has not been called");
         }
-
-        // TODO: This will lead to copy every time a scene fetches results.
-        // A better way is to have a Factory.advanceAll/fetchAll
-        mFactory->afterSceneAdvance(mIsGpu);
     }
 
     void SceneImpl::setActiveMaskRange(unsigned int start, unsigned int length, char value)
     {
         if (mIsGpu)
         {
-            CR_CHECK_CUDA(cudaMemsetAsync(dmActiveParticleMask + start, value, length))
+            CR_CHECK_CUDA(cudaMemsetAsync(dmActiveParticleMask + start, value, length, mCudaStream))
         }
 
         // Always set host array in case user wants to read using getActiveMask().
@@ -191,7 +172,7 @@ namespace crmpm
         mShapes.pushBack(static_cast<ShapeImpl *>(shape));
         if (mIsGpu)
         {
-            CR_CHECK_CUDA(cudaMemcpy(dmShapeIds, mShapeIds.begin(), mShapeCapacity * sizeof(int), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            CR_CHECK_CUDA(cudaMemcpyAsync(dmShapeIds, mShapeIds.begin(), mShapeCapacity * sizeof(int), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
         }
         mSolver->setNumShapes(mShapeIds.size());
     }
@@ -207,16 +188,16 @@ namespace crmpm
         }
 
         if (mIsGpu && mDataDirtyFlags & SceneDataDirtyFlags::eParticlePositionMass)
-            CR_CHECK_CUDA(cudaMemcpy(mGpuParticleData.positionMass, mCpuParticleData.positionMass, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            CR_CHECK_CUDA(cudaMemcpyAsync(mGpuParticleData.positionMass, mCpuParticleData.positionMass, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
 
         if (mIsGpu && mDataDirtyFlags & SceneDataDirtyFlags::eParticleVelocity)
-            CR_CHECK_CUDA(cudaMemcpy(mGpuParticleData.velocity, mCpuParticleData.velocity, mMaxNumParticles * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            CR_CHECK_CUDA(cudaMemcpyAsync(mGpuParticleData.velocity, mCpuParticleData.velocity, mMaxNumParticles * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
 
         if (mIsGpu && mDataDirtyFlags & SceneDataDirtyFlags::eParticleMaterialParams0)
-            CR_CHECK_CUDA(cudaMemcpy(mGpuParticleMaterialData.params0, mCpuParticleMaterialData.params0, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            CR_CHECK_CUDA(cudaMemcpyAsync(mGpuParticleMaterialData.params0, mCpuParticleMaterialData.params0, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
 
         if (mIsGpu && mDataDirtyFlags & SceneDataDirtyFlags::eParticleMaterialType)
-            CR_CHECK_CUDA(cudaMemcpy(mGpuParticleMaterialData.type, mCpuParticleMaterialData.type, mMaxNumParticles * sizeof(ParticleMaterialType), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            CR_CHECK_CUDA(cudaMemcpyAsync(mGpuParticleMaterialData.type, mCpuParticleMaterialData.type, mMaxNumParticles * sizeof(ParticleMaterialType), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
 
         if (mDataDirtyFlags & SceneDataDirtyFlags::eComputeInitialData)
         {
@@ -226,7 +207,7 @@ namespace crmpm
             }
             if (mIsGpu)
             {
-                CR_CHECK_CUDA(cudaMemcpy(dmComputeInitialDataIndices, mComputeInitialDataIndices.begin(), mComputeInitialDataIndices.size() * sizeof(unsigned int), cudaMemcpyKind::cudaMemcpyHostToDevice));
+                CR_CHECK_CUDA(cudaMemcpyAsync(dmComputeInitialDataIndices, mComputeInitialDataIndices.begin(), mComputeInitialDataIndices.size() * sizeof(unsigned int), cudaMemcpyKind::cudaMemcpyHostToDevice, mCudaStream));
                 mSolver->computeInitialData(mComputeInitialDataIndices.size(),
                                             dmComputeInitialDataIndices);
             }
@@ -241,12 +222,62 @@ namespace crmpm
         mDataDirtyFlags = SceneDataDirtyFlags::eNone;
     }
 
+    void SceneImpl::setSolver(MpmSolverBase &solver, bool isGpu)
+    {
+        mIsGpu = isGpu;
+        mSolver = &solver;
+        mSolver->setNumShapes(0);
+
+        if (mIsGpu)
+        {
+            // Always use the same cuda stream as the solver
+            mCudaStream = static_cast<MpmSolverGpu &>(solver).getCudaStream();
+        }
+    }
+
+    void SceneImpl::beforeAdvance()
+    {
+        // Set all shape data to be zero
+        for (ShapeImpl *shape : mShapes)
+        {
+            shape->resetCouplingForce();
+        }
+
+        syncDataIfNeeded();
+    }
+
+    void SceneImpl::afterAdvance()
+    {
+        // TODO: this can be moved to factory if we share a big memory block for all scenes
+        if (mIsGpu)
+        {
+            // GPU->CPU
+            CR_CHECK_CUDA(cudaMemcpyAsync(mCpuParticleData.positionMass, dmParticlePositionMass, mMaxNumParticles * sizeof(float4), cudaMemcpyKind::cudaMemcpyDeviceToHost, mCudaStream));
+            CR_CHECK_CUDA(cudaMemcpyAsync(mCpuParticleData.velocity, dmParticleVelocity, mMaxNumParticles * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyDeviceToHost, mCudaStream));
+        }
+
+        for (ShapeImpl *shape : mShapes)
+        {
+            shape->resetKinematicTarget();
+        }
+    }
+
+    SimulationStatus SceneImpl::getSimulationStatus()
+    {
+        return mStatus;
+    }
+
+    void SceneImpl::setSimulationStatus(SimulationStatus status)
+    {
+        mStatus = status;
+    }
+
     void SceneImpl::_release()
     {
         CR_DEBUG_LOG_INFO("%s", "Releasing Scene.");
         // In case solver still running
         if (mStatus == SimulationStatus::eBusy)
-            fetchResults();
+            fetchResults(); // This also works if advanceAll() was called
         
         // Release all referred shapes
         for (ShapeImpl *shape : mShapes)
@@ -260,35 +291,42 @@ namespace crmpm
         delete[] mParticleMaterialPropertiesGroup1;
         delete[] mActiveParticleMask;
 
+        mFactory->releaseScene(this);
+
         if (mIsGpu)
         {
-            CR_CHECK_CUDA(cudaFreeHost(mParticlePositionMass));
-            CR_CHECK_CUDA(cudaFreeHost(mParticleVelocity));
-
-            CR_CHECK_CUDA(cudaFree(dmParticlePositionMass));
-            CR_CHECK_CUDA(cudaFree(dmParticleVelocity));
-            CR_CHECK_CUDA(cudaFree(dmParticleMaterialPropertiesGroup1));
-            CR_CHECK_CUDA(cudaFree(dmParticleMaterialTypes));
-            CR_CHECK_CUDA(cudaFree(dmShapeIds));
-            CR_CHECK_CUDA(cudaFree(dmActiveParticleMask));
-            CR_CHECK_CUDA(cudaFree(dmComputeInitialDataIndices));
-        }
-        else
-        {
-            delete[] mParticlePositionMass;
-            delete[] mParticleVelocity;
+            CR_CHECK_CUDA(cudaFreeAsync(dmParticlePositionMass, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmParticleVelocity, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmParticleMaterialPropertiesGroup1, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmParticleMaterialTypes, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmShapeIds, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmActiveParticleMask, mCudaStream));
+            CR_CHECK_CUDA(cudaFreeAsync(dmComputeInitialDataIndices, mCudaStream));
         }
     }
 
-    void SceneImpl::beforeAdvance()
+    void SceneImpl::_advanceTaskFn(void *data)
     {
-        // Set all shape data to be zero
-        for (ShapeImpl *shape : mShapes)
+        beforeAdvance();
+        float dt = *((float *)data);
+        mFactory->beforeSceneAdvance(); // Note: a second scene advance will not trigger copy again.
+        float timeAdvanced = 0;
+        while (timeAdvanced < dt)
         {
-            shape->resetCouplingForce();
+            timeAdvanced += mSolver->step();
         }
 
-        syncDataIfNeeded();
+        // We don't need to call mSolver->fetchResults() here
+
+        afterAdvance();
+
+        if (mIsGpu)
+        { 
+            // Final stream synchronization if using GPU
+            CR_CHECK_CUDA(cudaStreamSynchronize(mCudaStream));
+        }
+
+        mFactory->afterSceneAdvance(mIsGpu);
     }
 
 } // namespace crmpm

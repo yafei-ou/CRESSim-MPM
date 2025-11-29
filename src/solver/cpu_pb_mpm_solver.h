@@ -83,7 +83,6 @@ namespace crmpm
         void initialize() override;
         float step() override;
         void computeInitialData(unsigned int numParticlesToCompute, const unsigned int *CR_RESTRICT indices) override;
-        ParticleData &getParticleData() override;
         void setSolverIterations(int n) override { mNumSovlerIterations = n; }
 
     private:

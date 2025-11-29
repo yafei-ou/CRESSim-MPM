@@ -86,7 +86,7 @@ crmpm::Scene *createTestScene(crmpm::SimulationFactory &simFactory)
 void testMultiScene()
 {
     // Initialize factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 15000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(1000000, 4, 4, 15000, true);
     crmpm::Array<crmpm::Scene*> scenes(5);
     for (int i = 0; i < 10; ++i)
     {
@@ -111,8 +111,55 @@ void testMultiScene()
     crmpm::releaseFactory(simFactory);
 }
 
+void testMultiSceneAdvanceAll()
+{
+    // Initialize factory
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(1000000, 4, 4, 15000, true, 2);
+    crmpm::Array<crmpm::Scene*> scenes(5);
+    for (int i = 0; i < 20; ++i)
+    {
+        scenes.pushBack(createTestScene(*simFactory));
+    }
+
+    bool shouldChange = true;
+
+    for (int i = 0; i < 10; ++i)
+    {
+        CR_DEBUG_LOG_EXECUTION_TIME(
+            simFactory->advanceAll(0.02);
+            simFactory->fetchResultsAll(););
+    }
+
+    crmpm::releaseFactory(simFactory);
+}
+
+void testMultiSceneAdvanceAllMultiStream()
+{
+    // Initialize factory
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(1000000, 4, 4, 15000, true, 2);
+    crmpm::Array<crmpm::Scene*> scenes(5);
+    for (int i = 0; i < 20; ++i)
+    {
+        scenes.pushBack(createTestScene(*simFactory));
+    }
+
+    bool shouldChange = true;
+
+    for (int i = 0; i < 10; ++i)
+    {
+        CR_DEBUG_LOG_EXECUTION_TIME(
+            simFactory->advanceAll(0.02);
+            simFactory->fetchResultsAll(););
+    }
+
+    crmpm::releaseFactory(simFactory);
+}
+
+
 int main()
 {
-    testMultiScene();
+    // testMultiScene();
+    testMultiSceneAdvanceAll();
+    testMultiSceneAdvanceAllMultiStream();
     return 0;
 }

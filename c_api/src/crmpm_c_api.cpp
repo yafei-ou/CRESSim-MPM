@@ -66,14 +66,16 @@ static crmpm::Bounds3 toEngine(const CrBounds3 &b)
 /* Engine management */
 
 void CrInitializeEngine(
+    unsigned int particleCapacity,
     unsigned int shapeCapacity,
     unsigned int geometryCapacity,
     unsigned int sdfDataCapacity,
-    int buildGpuData)
+    int buildGpuData,
+    int numCudaStreams)
 {
     if (!gIsEngineInitialized)
     {
-        gSimulationFactory = crmpm::createFactory(shapeCapacity, geometryCapacity, sdfDataCapacity, buildGpuData);
+        gSimulationFactory = crmpm::createFactory(particleCapacity, shapeCapacity, geometryCapacity, sdfDataCapacity, buildGpuData, numCudaStreams);
         gIsEngineInitialized = true;
     }
 }
@@ -103,6 +105,16 @@ void CrFetchResults(CrSceneHandle scene)
     cppScene->fetchResults();
 }
 
+void CrAdvanceAll(float dt)
+{
+    gSimulationFactory->advanceAll(dt);
+}
+
+void CrFetchResultsAll()
+{
+    gSimulationFactory->fetchResultsAll();
+}
+
 /* Simulation data */
 
 CrParticleData CrGetParticleData(CrSceneHandle scene)
@@ -125,6 +137,22 @@ CrParticleData CrGetParticleDataGpu(CrSceneHandle scene)
     data.positionMass = particleData.positionMass;
     data.velocity = particleData.velocity;
     return data;
+}
+
+CrParticleData CrGetParticleDataAll()
+{
+    crmpm::ParticleData &particleData = gSimulationFactory->getParticleDataAll();
+    CrParticleData data;
+    data.numParticles = particleData.size;
+    data.positionMass = particleData.positionMass;
+    data.velocity = particleData.velocity;
+    return data;
+}
+
+int CrGetSceneParticleDataGlobalOffset(CrSceneHandle scene)
+{
+    crmpm::Scene *cppScene = static_cast<crmpm::Scene *>(scene);
+    return cppScene->getParticleDataGlobalOffset();
 }
 
 void CrGetShapeCouplingForceTorque(CrShapeHandle shape, CrVec4f *outForce, CrVec4f *outTorque)

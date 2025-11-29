@@ -42,7 +42,7 @@ int main()
     Visualizer vis;
 
     // Create factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 15000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(10000, 4, 4, 15000, true);
 
     // Create Scene
     CR_DEBUG_LOG_INFO("%s", "Create Scene");

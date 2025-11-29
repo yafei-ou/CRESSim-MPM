@@ -32,13 +32,13 @@
 #ifndef CR_GPU_MLS_MPM_SOLVER_CUH
 #define CR_GPU_MLS_MPM_SOLVER_CUH
 
-#include "mpm_solver_base.h"
+#include "mpm_solver_gpu.h"
 #include "particle_data.h"
 #include "preprocessor.h"
 
 namespace crmpm
 {
-    class GpuMlsMpmSolver : public MpmSolverBase
+    class GpuMlsMpmSolver : public MpmSolverGpu
     {
     public:
         GpuMlsMpmSolver(int numParticles, float cellSize, Bounds3 gridBound);
@@ -46,9 +46,7 @@ namespace crmpm
 
         void initialize() override;
         float step() override;
-        void fetchResults() override;
         void computeInitialData(unsigned int numParticlesToCompute, const unsigned int *CR_RESTRICT indices) override;
-        ParticleData &getParticleData() override;
 
     private:
         // Host data

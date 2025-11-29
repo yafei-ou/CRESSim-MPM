@@ -188,9 +188,4 @@ namespace crmpm
         return mIntegrationStepSize;
     }
 
-    ParticleData &CpuMlsMpmSolver::getParticleData()
-    {
-        return *mParticleData;
-    }
-
 } // namespace crmpm

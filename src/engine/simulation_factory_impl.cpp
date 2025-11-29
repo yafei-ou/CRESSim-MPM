@@ -53,17 +53,28 @@
 
 namespace crmpm
 {
-    SimulationFactoryImpl::SimulationFactoryImpl(int shapeCapacity,
+    SimulationFactoryImpl::SimulationFactoryImpl(int particleCapacity,
+                                                 int shapeCapacity,
                                                  int geometryCapacity,
                                                  int sdfDataCapacity,
-                                                 bool buildGpuData)
+                                                 bool buildGpuData,
+                                                 int numCudaStreams)
         : mShapeCapacity(shapeCapacity),
           mGeometryCapacity(geometryCapacity),
           mShapeIndices(shapeCapacity),
           mGeometryIndices(geometryCapacity),
           mIsGpu(buildGpuData),
-          mSdfDataCapacity(sdfDataCapacity)
+          mNumCudaStreams(numCudaStreams),
+          mSdfDataCapacity(sdfDataCapacity),
+          mParticleCapacity(particleCapacity),
+          mCpuParticleData(particleCapacity),
+          mParticleCpuDataManager(particleCapacity),
+          mStatus(SimulationStatus::eIdle),
+          mBusySceneCount(0),
+          mAdvanceAllTaskFn(std::bind(&SimulationFactoryImpl::_advanceAllTaskFn, this, std::placeholders::_1))
     {
+        mThreadManager.start(); // Seperate thread for advanceAll
+
         mCpuShapeData.size = shapeCapacity;
         mCpuShapeData.type = new ShapeType[mShapeCapacity];
         mCpuShapeData.geometryIdx = new int[mShapeCapacity];
@@ -83,6 +94,18 @@ namespace crmpm
 
         if (mIsGpu)
         {
+            // Create CUDA streams
+            for (int i = 0; i < mNumCudaStreams; ++i)
+            {
+                cudaStream_t stream;
+                CR_CHECK_CUDA(cudaStreamCreate(&stream));
+                mCudaStreams.pushBack(Pair<cudaStream_t, int>(stream, 0));
+            }
+
+            // Use pinned host memory for particle data
+            CR_CHECK_CUDA(cudaMallocHost<float4>(&mCpuParticlePositionMass, mParticleCapacity * sizeof(float4)));
+            CR_CHECK_CUDA(cudaMallocHost<Vec3f>(&mCpuParticleVelocity, mParticleCapacity * sizeof(Vec3f)));
+
             // Use pinned host memory for large SDF data
             CR_CHECK_CUDA(cudaMallocHost<float4>(&mCpuSdfData.gradientSignedDistance, sizeof(float4) * mSdfDataCapacity));
 
@@ -110,10 +133,16 @@ namespace crmpm
         }
         else
         {
+            // Particle data block
+            mCpuParticlePositionMass = new float4[mParticleCapacity];
+            mCpuParticleVelocity = new Vec3f[mParticleCapacity];
+
             mCpuSdfData.gradientSignedDistance = new float4[mSdfDataCapacity];
             mCpuShapeData.force = new float4[mShapeCapacity];
             mCpuShapeData.torque = new float4[mShapeCapacity];
         }
+        mCpuParticleData.positionMass = mCpuParticlePositionMass;
+        mCpuParticleData.velocity = mCpuParticleVelocity;
 
         // Initialize SDF free list
         FreeSdfDataBlock freeSdfBlock;
@@ -143,7 +172,16 @@ namespace crmpm
 
             if (mIsGpu)
             {
+                // Destroy CUDA streams
+                for (Pair<cudaStream_t, int> stream : mCudaStreams)
+                {
+                    CR_CHECK_CUDA(cudaStreamDestroy(stream.first));
+                }
+                mCudaStreams.clear();
+
                 // Free pinned host memory
+                CR_CHECK_CUDA(cudaFreeHost(mCpuParticlePositionMass));
+                CR_CHECK_CUDA(cudaFreeHost(mCpuParticleVelocity));
                 CR_CHECK_CUDA(cudaFreeHost(mCpuSdfData.gradientSignedDistance));
                 CR_CHECK_CUDA(cudaFreeHost(mCpuShapeData.force));
                 CR_CHECK_CUDA(cudaFreeHost(mCpuShapeData.torque));
@@ -169,6 +207,8 @@ namespace crmpm
             }
             else
             {
+                delete[] mCpuParticlePositionMass;
+                delete[] mCpuParticleVelocity;
                 delete[] mCpuSdfData.gradientSignedDistance;
                 delete[] mCpuShapeData.force;
                 delete[] mCpuShapeData.torque;
@@ -180,8 +220,62 @@ namespace crmpm
             return mIsGpu;
         }
 
+        void SimulationFactoryImpl::advanceAll(float dt)
+        {
+            bool isSceneIdle = true;
+            for (SceneImpl *scene : mSceneList)
+            {
+                if (scene->getSimulationStatus() != SimulationStatus::eIdle)
+                {
+                    isSceneIdle = false;
+                }
+            }
+
+            if (isSceneIdle && mStatus == SimulationStatus::eIdle)
+            {
+                mThreadManager.submitTask(mAdvanceAllTaskFn, &dt, sizeof(float));
+                mStatus = SimulationStatus::eBusy;
+
+                // Set all scenes to be busy
+                for (SceneImpl *scene : mSceneList)
+                {
+                    scene->setSimulationStatus(SimulationStatus::eBusy);
+                }
+            }
+            else
+            {
+                CR_DEBUG_LOG_WARNING("%s", "SimulationFactory is busy.");
+            }
+        }
+
+        void SimulationFactoryImpl::fetchResultsAll()
+        {
+            if (mStatus != SimulationStatus::eBusy)
+            {
+                CR_DEBUG_LOG_WARNING("%s", "advanceAll() has not been called");
+                return;
+            }
+
+            mThreadManager.waitForIdle();
+            mStatus = SimulationStatus::eIdle;
+
+            // Set all scene to be idle
+            for (SceneImpl *scene : mSceneList)
+            {
+                scene->setSimulationStatus(SimulationStatus::eIdle);
+            }
+        }
+
         Scene *SimulationFactoryImpl::createScene(const SceneDesc &desc)
         {
+            // Check if running out of particle capacity
+            int particleDataOffset = mParticleCpuDataManager.request(desc.numMaxParticles);
+            if (particleDataOffset < 0)
+            {
+                CR_DEBUG_LOG_ERROR("%s", "No enough particle capacity in SimulationFactory.");
+                return nullptr;
+            }
+
             MpmSolverBase *solver = nullptr;
             const float cellSize = desc.gridCellSize;
             Bounds3 gridBounds = desc.gridBounds;
@@ -230,6 +324,16 @@ namespace crmpm
 
                 default:
                     break;
+                }
+
+                if (solver && isSolverGpu)
+                {
+                    int streamIdx = getCudaStreamByLoad();
+
+                    // GPU solvers must inherit from MpmSolverGpu
+                    MpmSolverGpu *_solver = static_cast<MpmSolverGpu *>(solver);
+                    _solver->setCudaStream(mCudaStreams[streamIdx].first);
+                    mCudaStreams[streamIdx].second++; // Incrememt CUDA stream load.
                 }
             }
             else
@@ -285,11 +389,24 @@ namespace crmpm
                 solver->setIntegrationStepSize(desc.solverIntegrationStepSize);
                 solver->setSolverIterations(desc.solverIterations);
                 
-                scene = new SceneImpl(desc.numMaxParticles, mShapeCapacity);
+                scene = new SceneImpl(desc.numMaxParticles, mShapeCapacity, mCpuParticlePositionMass, mCpuParticleVelocity, particleDataOffset);
                 scene->setFactory(*this);
                 scene->setSolver(*solver, isSolverGpu);
-                scene->initialize(desc.numMaxParticles);
+                scene->initialize();
             }
+
+            if (scene && solver)
+            {
+                // Add to Scene list
+                mSceneList.pushBack(scene);
+                mSolverList.pushBack(solver);
+            }
+            else
+            {
+                // If anything fails, release requested particle data
+                mParticleCpuDataManager.release(particleDataOffset, desc.numMaxParticles);
+            }
+
             return scene;
         }
 
@@ -664,6 +781,21 @@ namespace crmpm
         }
 #endif
 
+        void SimulationFactoryImpl::releaseScene(Scene *scene)
+        {
+            SceneImpl *sceneImpl = static_cast<SceneImpl *>(scene);
+
+            // Free the particle data
+            int particleDataOffset = sceneImpl->getParticleDataGlobalOffset();
+            int maxNumParticles = sceneImpl->getMaxNumParticles();
+            mParticleCpuDataManager.release(particleDataOffset, maxNumParticles);
+
+            // Remove from scene/solver lists
+            int index = mSceneList.find(sceneImpl) - mSceneList.begin();
+            mSceneList.remove(index);
+            mSolverList.remove(index);
+        }
+
         void SimulationFactoryImpl::releaseShape(Shape *shape)
         {
             int id = shape->getId();
@@ -730,6 +862,11 @@ namespace crmpm
             mGpuDataDirtyFlags |= flags;
         }
 
+        ParticleData &SimulationFactoryImpl::getParticleDataAll()
+        {
+            return mCpuParticleData;
+        }
+
         void SimulationFactoryImpl::resetDirtyFlags()
         {
             mGpuDataDirtyFlags = SimulationFactoryGpuDataDirtyFlags::eNone;
@@ -787,6 +924,11 @@ namespace crmpm
             // Copy GPU shape coupling data to CPU
             CR_CHECK_CUDA(cudaMemcpy(mCpuShapeData.force, mGpuShapeData.force, mShapeCapacity * sizeof(float4), cudaMemcpyKind::cudaMemcpyDeviceToHost));
             CR_CHECK_CUDA(cudaMemcpy(mCpuShapeData.torque, mGpuShapeData.torque, mShapeCapacity * sizeof(float4), cudaMemcpyKind::cudaMemcpyDeviceToHost));
+        }
+
+        SimulationStatus SimulationFactoryImpl::getSimulationStatus()
+        {
+            return mStatus;
         }
 
         void SimulationFactoryImpl::checkAndGrowGeometryData()
@@ -915,6 +1057,68 @@ namespace crmpm
                 }
             }
             return -1;
+        }
+
+        /**
+         * Get the stream index with minimum load
+         */
+        int SimulationFactoryImpl::getCudaStreamByLoad()
+        {
+            int best = 0;
+            for (int i = 1; i < mNumCudaStreams; ++i)
+            {
+                if (mCudaStreams[i].second < mCudaStreams[best].second)
+                {
+                    best = i;
+                }
+            }
+            return best;
+        }
+
+        void SimulationFactoryImpl::_advanceAllTaskFn(void *data)
+        {
+            for (SceneImpl *scene : mSceneList)
+            {
+                scene->beforeAdvance();
+            }
+
+            // SimulationFactory uses default stream.
+            // Device synced before any cudaMemcpy unless
+            // Using per-thread default stream
+            // TODO: we should use it for better practice.
+            // But if we stick to only use the default stream
+            // in the factory, this should be okay, because
+            // all Scenes/Solvers use their own streams.
+            beforeSceneAdvance();
+
+            float dt = *((float *)data);
+            for (MpmSolverBase *solver : mSolverList)
+            {
+                float timeAdvanced = 0;
+                while (timeAdvanced < dt)
+                {
+                    // Step all solvers iteratively
+                    // This won't help anything on the CPU,
+                    // but should reduce GPU sync.
+                    // Can be further optimized with CUDA streams
+                    {
+                        timeAdvanced += solver->step();
+                    }
+                }
+            }
+
+            // Fetch results
+            if (mIsGpu)
+            {
+                cudaDeviceSynchronize();
+            }
+
+            for (SceneImpl *scene : mSceneList)
+            {
+                scene->afterAdvance();
+            }
+
+            afterSceneAdvance(true);
         }
 
 } // namespace crmpm

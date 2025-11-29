@@ -92,6 +92,16 @@ namespace crmpm
         virtual bool isGpu() const = 0;
 
         /**
+         * @brief Advance all scenes.
+         */
+        virtual void advanceAll(float dt) = 0;
+
+        /**
+         * @brief Fetch all results after advanceAll().
+         */
+        virtual void fetchResultsAll() = 0;
+
+        /**
          * @brief Create a `Scene`
          * 
          * @param[in] desc Scene description. See `SceneDesc`.
@@ -150,6 +160,11 @@ namespace crmpm
          */
         virtual void markDirty(SimulationFactoryGpuDataDirtyFlags flags) = 0;
 
+        /**
+         * @brief Get the shared CPU particle data block for all scenes
+         */
+        virtual ParticleData &getParticleDataAll() = 0;
+
     protected:
         SimulationFactory() {};
 
@@ -166,10 +181,12 @@ namespace crmpm
      * @param[in] sdfDataCapacity Maximum number of SDF data (in terms of float4 structs).
      * @param[in] buildGpuData If the factory uses GPU.
      */
-    CRMPM_ENGINE_API SimulationFactory *createFactory(int shapeCapacity,
+    CRMPM_ENGINE_API SimulationFactory *createFactory(int particleCapacity,
+                                                      int shapeCapacity,
                                                       int geometryCapacity,
                                                       int sdfDataCapacity = 10000,
-                                                      bool buildGpuData = true);
+                                                      bool buildGpuData = true,
+                                                      int numCudaStreams = 1);
 
     /**
      * @brief Release the `SimulationFactory`

@@ -27,28 +27,25 @@
 // OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "factory_controlled.h"
-#include "simulation_factory_impl.h"
+#include <cuda_runtime.h>
+
+#include "mpm_solver_gpu.h"
+#include "check_cuda.cuh"
 
 namespace crmpm
 {
-    void FactoryControlled::markDirty(SimulationFactoryGpuDataDirtyFlags flags)
+    void MpmSolverGpu::fetchResults()
     {
-        mFactory->markDirty(flags);
+        CR_CHECK_CUDA(cudaStreamSynchronize(mCudaStream));
     }
 
-    SimulationFactory *createFactory(int particleCapacity,
-                                     int shapeCapacity,
-                                     int geometryCapacity,
-                                     int sdfDataCapacity,
-                                     bool buildGpuData,
-                                     int numCudaStreams)
+    cudaStream_t MpmSolverGpu::getCudaStream()
     {
-        return new SimulationFactoryImpl(particleCapacity, shapeCapacity, geometryCapacity, sdfDataCapacity, buildGpuData, numCudaStreams);
+        return mCudaStream;
     }
 
-    void releaseFactory(SimulationFactory *simulationFactory)
+    void MpmSolverGpu::setCudaStream(cudaStream_t stream)
     {
-        delete static_cast<SimulationFactoryImpl *>(simulationFactory);
+        mCudaStream = stream;
     }
 }

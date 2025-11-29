@@ -138,7 +138,7 @@ void testCApi()
     // Visualizer.
     Visualizer vis;
 
-    CrInitializeEngine(4, 4, 0, true);
+    CrInitializeEngine(1000000, 4, 4, 0, true, 1);
 
     testCreate();
     testCreate();

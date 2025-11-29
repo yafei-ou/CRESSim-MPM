@@ -85,7 +85,7 @@ void warmupCUDA() {
 void testCubeParticleObject(float invSize)
 {
     // Initialize factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 15000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(1000000, 4, 4, 15000, true);
 
     // Initialize scene
     crmpm::SceneDesc sceneDesc;

@@ -88,7 +88,7 @@ int main()
     // Visualizer.
     Visualizer vis;
 
-    CrInitializeEngine(4, 4, 0, true);
+    CrInitializeEngine(10000, 4, 4, 0, true, 1);
 
     // Initialize scene
     auto solverType = static_cast<int>(crmpm::MpmSolverType::eCpuMlsMpmSolver);

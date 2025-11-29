@@ -104,11 +104,6 @@ namespace crmpm
         return mIntegrationStepSize;
     }
 
-    ParticleData &CpuPbMpmSolver::getParticleData()
-    {
-        return *mParticleData;
-    }
-
     void CpuPbMpmSolver::resetGrid()
     {
         for (int idx = 0; idx < mGrid->size; ++idx)

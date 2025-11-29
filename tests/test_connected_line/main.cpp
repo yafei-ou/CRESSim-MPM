@@ -43,7 +43,7 @@ void testConnectedLine()
     Visualizer vis;
 
     // Initialize factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 15000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4000, 4, 4, 15000, true);
 
     // Initialize scene
     CR_DEBUG_LOG_INFO("%s", "Create Scene");

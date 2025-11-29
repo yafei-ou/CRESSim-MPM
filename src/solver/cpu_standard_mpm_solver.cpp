@@ -172,9 +172,4 @@ namespace crmpm
         gridToParticle();
         return mIntegrationStepSize;
     }
-
-    ParticleData &CpuStandardMpmSolver::getParticleData()
-    {
-        return *mParticleData;
-    }
 } // namespace crmpm

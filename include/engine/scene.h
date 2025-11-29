@@ -57,6 +57,10 @@ namespace crmpm
         /**
          * @brief Blocks the thread until simulation results are available
          * from the last call to `Scene::advance()`.
+         * 
+         * If `SimulationFactory.advanceAll()` was called, this automatically
+         * calls `SimulationFactory.fetchResultsAll()` and waits until all
+         * simulations have been completed.
          */
         virtual void fetchResults() = 0;
 
@@ -82,6 +86,15 @@ namespace crmpm
          * @brief Get the current particle data SOA (in host memory).
          */
         virtual ParticleData &getParticleData() = 0;
+
+        /**
+         * @brief Get the particle data offset index in the global shared
+         * particle data block managed by SimulationFactory.
+         * 
+         * This is only useful if the complete particle data block from 
+         * SimulationFactory is obtained by `SimulationFactory.getParticleDataAll()`.
+         */
+        virtual int getParticleDataGlobalOffset() = 0;
 
         /**
          * @brief Get the current particle data SOA in GPU device memory.

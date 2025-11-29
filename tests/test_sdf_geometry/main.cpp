@@ -54,7 +54,7 @@ void testSdfGeometry()
     mesh.numTriangles = numTriangles;
 
     // Initialize factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 20000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(1000, 4, 4, 20000, true);
 
     CR_DEBUG_LOG_INFO("%s", "geom1");
     crmpm::SdfDesc sdfDesc;

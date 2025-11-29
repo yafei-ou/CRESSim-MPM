@@ -32,20 +32,38 @@
 #ifndef CR_SIMULATION_FACTORY_IMPL_H
 #define CR_SIMULATION_FACTORY_IMPL_H
 
+#include "type_aliases.h"
 #include "simulation_factory.h"
+#include "simulation_status.h"
+#include "single_thread_manager.h"
+#include "cpu_data_allocation_manager.h"
+
+// Forward declare CUstream_st and cudaStream_t
+struct CUstream_st;
+typedef CUstream_st* cudaStream_t;
 
 namespace crmpm
 {
+    class SceneImpl;
+    class MpmSolverBase;
+    class CpuDataAllocationManager;
+
     class SimulationFactoryImpl : public SimulationFactory
     {
     public:
-        SimulationFactoryImpl(int shapeCapacity,
-                          int geometryCapacity,
-                          int sdfDataCapacity = 10000,
-                          bool buildGpuData = true);
+        SimulationFactoryImpl(int particleCapacity,
+                              int shapeCapacity,
+                              int geometryCapacity,
+                              int sdfDataCapacity = 10000,
+                              bool isGpu = true,
+                              int numCudaStreams = 1);
         ~SimulationFactoryImpl();
 
         bool isGpu() const override;
+
+        void advanceAll(float dt) override;
+
+        void fetchResultsAll() override;
 
         Scene *createScene(const SceneDesc &desc) override;
 
@@ -60,12 +78,15 @@ namespace crmpm
 
         void markDirty(SimulationFactoryGpuDataDirtyFlags flags) override;
 
+        ParticleData &getParticleDataAll() override;
+
 #ifdef _DEBUG
         void printGeometries();
         void printShapes();
 #endif
 
     protected:
+        void releaseScene(Scene *scene);
         void releaseShape(Shape *shape);
         void releaseGeometry(Geometry *geom);
 
@@ -74,8 +95,19 @@ namespace crmpm
         void beforeSceneAdvance();
         void afterSceneAdvance(bool isGpuScene);
 
+        SimulationStatus getSimulationStatus();
+
     private:
         bool mIsGpu;
+
+        Array<SceneImpl *> mSceneList;
+        Array<MpmSolverBase *> mSolverList;
+
+        int mParticleCapacity;
+        ParticleData mCpuParticleData;
+        float4 *mCpuParticlePositionMass;
+        Vec3f *mCpuParticleVelocity;
+        CpuDataAllocationManager mParticleCpuDataManager; // This manages both postitionMass and velocity data
 
         int mShapeCapacity;
         ShapeData mCpuShapeData;
@@ -102,9 +134,22 @@ namespace crmpm
         };
         Array<FreeSdfDataBlock> mFreeSdfDataBlock;
 
+        SimulationStatus mStatus;
+        int mBusySceneCount;
+        SingleThreadManager mThreadManager;
+        Task mAdvanceAllTaskFn;
+
+        // CUDA related
+        int mNumCudaStreams;
+        Array<Pair<cudaStream_t, int>> mCudaStreams;
+
         void checkAndGrowGeometryData();
         size_t getSdfDataOffset(size_t requestedSize);
         int getNewSdfIndex();
+
+        int getCudaStreamByLoad();
+
+        void _advanceAllTaskFn(void *data);
 
         friend class FactoryControlledImpl;
         friend class SceneImpl;

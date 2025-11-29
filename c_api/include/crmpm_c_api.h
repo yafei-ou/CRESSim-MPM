@@ -118,10 +118,12 @@ extern "C"
     /* Engine management */
 
     CRMPM_C_API void CrInitializeEngine(
+        unsigned int particleCapacity,
         unsigned int shapeCapacity,
         unsigned int geometryCapacity,
         unsigned int sdfDataCapacity,
-        int buildGpuData);
+        int buildGpuData,
+        int numCudaStreams);
 
     CRMPM_C_API int CrGetInitializationStatus(void);
 
@@ -136,6 +138,10 @@ extern "C"
     CRMPM_C_API void CrFetchResults(
         CrSceneHandle scene);
 
+    CRMPM_C_API void CrAdvanceAll(float dt);
+
+    CRMPM_C_API void CrFetchResultsAll();
+
     /* Simulation data */
 
     CRMPM_C_API CrParticleData CrGetParticleData(
@@ -143,6 +149,10 @@ extern "C"
 
     CRMPM_C_API CrParticleData CrGetParticleDataGpu(
         CrSceneHandle scene);
+
+    CRMPM_C_API CrParticleData CrGetParticleDataAll();
+
+    CRMPM_C_API int CrGetSceneParticleDataGlobalOffset(CrSceneHandle scene);
 
     CRMPM_C_API void CrGetShapeCouplingForceTorque(
         CrShapeHandle shape,
