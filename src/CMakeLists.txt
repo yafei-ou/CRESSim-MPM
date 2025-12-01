@@ -40,6 +40,14 @@ if(ENGINE_STATIC)
 else()
     add_library(crmpm_engine SHARED ${PROJECT_SOURCES})
     add_compile_definitions(CRMPM_ENGINE_EXPORTS)
+    set_target_properties(crmpm_engine PROPERTIES
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+
+    if(WIN32)
+        target_sources(crmpm_engine PRIVATE ${CMAKE_BINARY_DIR}/generated/version.rc)
+    endif()
 endif()
 
 set_target_properties(crmpm_engine PROPERTIES POSITION_INDEPENDENT_CODE ON)

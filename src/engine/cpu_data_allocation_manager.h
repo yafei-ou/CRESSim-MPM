@@ -33,6 +33,7 @@
 #define CR_CPU_DATA_ALLOCATION_MANAGER_H
 
 #include <algorithm>
+#include <climits>
 
 #include "array.h"
 #include "type_aliases.h"

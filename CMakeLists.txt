@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.18)
-project(CRESSIM_MPM LANGUAGES C CXX CUDA)
+project(CRESSIM_MPM VERSION 2.0.1 LANGUAGES C CXX CUDA)
+
+set(PROJECT_VENDOR "Yafei Ou")
+set(PROJECT_DESCRIPTION "CRESSim-MPM: A Material Point Method Library for Surgical Soft Body Simulation with Cutting and Suturing")
+set(PROJECT_PRODUCT_NAME "CRESSim-MPM")
+
+configure_file(
+    ${PROJECT_SOURCE_DIR}/cmake/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.h
+    @ONLY
+)
+configure_file(
+    ${PROJECT_SOURCE_DIR}/cmake/version.rc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/generated/version.rc
+    @ONLY)
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/generated)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
@@ -75,6 +91,8 @@ endif()
 
 if(ENABLE_TESTS)
     add_subdirectory(tests)
-    add_subdirectory(extern/glad/src)
 endif()
 
+if(ENABLE_EXAMPLES OR ENABLE_TESTS)
+    add_subdirectory(extern/glad/src)
+endif()

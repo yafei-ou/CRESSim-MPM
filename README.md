@@ -20,7 +20,7 @@ CRESSim-MPM is a material point method (MPM) simulation library using CUDA. It i
 
 ### Core
 
-* CUDA Toolkit (tested on version 12.6). Any recent version (version 12 or even older versions) should also work.
+* CUDA Toolkit (tested on version 12.6 and 13.0). Any recent version (version 12/13 or even older versions) should generally work.
 * CMake (>=3.18)
 
 ### Optional
@@ -78,7 +78,7 @@ Below is a simple example of creating a simulation scene without soft body parti
 int main()
 {
     // Create factory
-    crmpm::SimulationFactory *simFactory = crmpm::createFactory(4, 4, 2000, true);
+    crmpm::SimulationFactory *simFactory = crmpm::createFactory(10000, 4, 4, 2000, true);
 
     // Scene description
     crmpm::SceneDesc sceneDesc;
