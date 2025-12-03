@@ -1,3 +1,10 @@
+# v2.0.2
+December 3, 2025
+
+## Fixes
+* Fix a math error in calculating node velocities relative to a rigid body.
+
+
 # v2.0.1
 December 1, 2025
 

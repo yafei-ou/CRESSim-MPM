@@ -46,9 +46,9 @@ namespace crmpm
     CR_FORCE_INLINE CR_CUDA_HOST CR_CUDA_DEVICE Vec3f computeVelocityAtRigidBody(
         const Vec3f &linearVelocity,
         const Vec3f &angularVelocity,
-        const Vec3f &localPosition)
+        const Vec3f &worldRelativePosition)
     {
-        Vec3f angularContribution = angularVelocity.cross(localPosition);
+        Vec3f angularContribution = angularVelocity.cross(worldRelativePosition);
 
         return linearVelocity + angularContribution;
     }
@@ -137,11 +137,12 @@ namespace crmpm
             // Local position
             const Vec3f _shapePosition = shapePosition[_shapeId];
             const Quat _shapeRotation = shapeRotation[_shapeId];
-            Vec3f relativePosition = _shapeRotation.rotateInv(inputPosition - _shapePosition);
+            Vec3f worldRelativePositionn = inputPosition - _shapePosition;
+            Vec3f relativePosition = _shapeRotation.rotateInv(worldRelativePositionn);
             Vec3f localPosition = relativePosition * _shapeInvScale; // inverse scale to local position
 
             // Node velocity correction based on rigid contact
-            Vec3f rigidVelocity = _shapeType == ShapeType::eStatic ? Vec3f() : computeVelocityAtRigidBody(shapeLinearVelocity[_shapeId], shapeAngularVelocity[_shapeId], localPosition);
+            Vec3f rigidVelocity = _shapeType == ShapeType::eStatic ? Vec3f() : computeVelocityAtRigidBody(shapeLinearVelocity[_shapeId], shapeAngularVelocity[_shapeId], worldRelativePositionn);
 
             float4 sdfGradientDistance;
             Vec3f tangentDirection;

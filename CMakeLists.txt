@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(CRESSIM_MPM VERSION 2.0.1 LANGUAGES C CXX CUDA)
+project(CRESSIM_MPM VERSION 2.0.2 LANGUAGES C CXX CUDA)
 
 set(PROJECT_VENDOR "Yafei Ou")
 set(PROJECT_DESCRIPTION "CRESSim-MPM: A Material Point Method Library for Surgical Soft Body Simulation with Cutting and Suturing")
@@ -53,10 +53,6 @@ if(WIN32)
     set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /DEBUG")
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /DEBUG")
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-    if (NOT EXISTS "${GLFW_LIBRARY_DIR}/glfw3.lib")
-        message(FATAL_ERROR "GLFW libraries not found. Set GLFW_LIBRARY_DIR.")
-    endif()
 endif()
 
 if(ENABLE_DEBUG_LOGGER)
@@ -82,6 +78,10 @@ if(ENABLE_EXAMPLES OR ENABLE_TESTS)
         set_target_properties(Eigen3::Eigen PROPERTIES
             INTERFACE_INCLUDE_DIRECTORIES "${EIGEN3_INCLUDE_DIR}"
         )
+    endif()
+
+    if(WIN32 AND NOT EXISTS "${GLFW_LIBRARY_DIR}/glfw3.lib")
+        message(FATAL_ERROR "GLFW libraries not found. Set GLFW_LIBRARY_DIR.")
     endif()
 endif()
 
