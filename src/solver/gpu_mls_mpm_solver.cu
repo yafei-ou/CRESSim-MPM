@@ -216,10 +216,10 @@ namespace crmpm
 
         unsigned int idx = indices[i];
 
-        // Set deformation tensor to identity
-        particleGradientDeformationTensorColumn0[idx].x = 1;
-        particleGradientDeformationTensorColumn1[idx].y = 1;
-        particleGradientDeformationTensorColumn2[idx].z = 1;
+        // Set deformation gradient tensor to identity
+        particleGradientDeformationTensorColumn0[idx] = make_float4(1, 0, 0, 0);
+        particleGradientDeformationTensorColumn1[idx] = make_float4(0, 1, 0, 0);
+        particleGradientDeformationTensorColumn2[idx] = make_float4(0, 0, 1, 0);
 
         mlsMpmComputeInitialGridMass<true>(
             gridBoundMin,
@@ -250,10 +250,10 @@ namespace crmpm
 
         unsigned int idx = indices[i];
 
-        // Set deformation tensor to identity
-        particleGradientDeformationTensorColumn0[idx].x = 1;
-        particleGradientDeformationTensorColumn1[idx].y = 1;
-        particleGradientDeformationTensorColumn2[idx].z = 1;
+        // Set deformation gradient tensor to identity
+        particleGradientDeformationTensorColumn0[idx] = make_float4(1, 0, 0, 0);
+        particleGradientDeformationTensorColumn1[idx] = make_float4(0, 1, 0, 0);
+        particleGradientDeformationTensorColumn2[idx] = make_float4(0, 0, 1, 0);
 
         mlsMpmComputeInitialVolume(
             gridBoundMin,

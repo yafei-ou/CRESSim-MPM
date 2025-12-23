@@ -332,6 +332,22 @@ void CrAddShapeToScene(
     cppScene->addShape(cppShape);
 }
 
+void CrSetShapePose(CrShapeHandle shape, CrVec3f3 *position, CrQuat *rotation)
+{
+    crmpm::Shape *cppShape = static_cast<crmpm::Shape *>(shape);
+    crmpm::Transform t;
+    t.position = toEngine(*position);
+    t.rotation = toEngine(*rotation);
+
+    cppShape->setPose(t);
+}
+
+void CrSetShapeVelocity(CrShapeHandle shape, CrVec3f3 *linear, CrVec3f3 *angular)
+{
+    crmpm::Shape *cppShape = static_cast<crmpm::Shape *>(shape);
+    cppShape->setVelocity(toEngine(*linear), toEngine(*angular));
+}
+
 void CrSetShapeKinematicTarget(
     CrShapeHandle shape,
     CrVec3f3 *targetPosition,

@@ -51,6 +51,24 @@ namespace crmpm
         mFactory->markDirty(SimulationFactoryGpuDataDirtyFlags::eShapeGeometryIdx);
     }
 
+    void ShapeImpl::setPose(const Transform &transform)
+    {
+        _position() = transform.position;
+        _rotation() = transform.rotation;
+
+        mFactory->markDirty(SimulationFactoryGpuDataDirtyFlags::eShapePosition);
+        mFactory->markDirty(SimulationFactoryGpuDataDirtyFlags::eShapeRotation);
+    }
+
+    void ShapeImpl::setVelocity(const Vec3f &linear, const Vec3f &angular)
+    {
+        _linearVelocity() = linear;
+        _angularVelocity() = angular;
+
+        mFactory->markDirty(SimulationFactoryGpuDataDirtyFlags::eShapeLinearVelocity);
+        mFactory->markDirty(SimulationFactoryGpuDataDirtyFlags::eShapeAngularVelocity);
+    }
+
     void ShapeImpl::setKinematicTarget(const Transform &transform, const float dt)
     {
         if (getType() == ShapeType::eStatic)

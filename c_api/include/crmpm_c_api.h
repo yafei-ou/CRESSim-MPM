@@ -231,6 +231,16 @@ extern "C"
         CrShapeHandle shape,
         CrSceneHandle scene);
 
+    CRMPM_C_API void CrSetShapePose(
+        CrShapeHandle shape,
+        CrVec3f3 *position,
+        CrQuat *rotation);
+
+    CRMPM_C_API void CrSetShapeVelocity(
+        CrShapeHandle shape,
+        CrVec3f3 *linear,
+        CrVec3f3 *angular);
+
     CRMPM_C_API void CrSetShapeKinematicTarget(
         CrShapeHandle shape,
         CrVec3f3 *targetPosition,

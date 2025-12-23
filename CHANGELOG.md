@@ -1,3 +1,13 @@
+# v2.1.0
+December 23, 2025
+
+## API
+* Added methods for setting shape pose and velocity directly using `setPose()` and `setVelocity()`, in addition to `setKinematicTarget()`.
+* Added corresponding C API functions `CrSetShapePose` and `CrSetShapeVelocity`.
+
+## Fixes
+* Fixed an error when deformation gradient tensor is not correctly (re)initialized to identity.
+
 # v2.0.2
 December 3, 2025
 

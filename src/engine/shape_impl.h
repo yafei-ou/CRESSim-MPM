@@ -57,6 +57,10 @@ namespace crmpm
 
         CR_FORCE_INLINE ShapeType getType() override { return mShapeData->type[mId]; }
 
+        void setPose(const Transform &transform) override;
+
+        void setVelocity(const Vec3f &linear, const Vec3f &angular) override;
+
         void setKinematicTarget(const Transform &transform, const float dt) override;
 
         CR_FORCE_INLINE void setScale(const Vec3f &scale) override

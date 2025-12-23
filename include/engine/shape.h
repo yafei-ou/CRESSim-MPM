@@ -110,9 +110,20 @@ namespace crmpm
         virtual ShapeType getType() = 0;
 
         /**
+         * Set (teleport) the shape to a certain pose.
+         */
+        virtual void setPose(const Transform &transform) = 0;
+
+        /**
+         * Set the velocity (both linear and angular) of the shape.
+         * For dynamic shapes, `setPose` and `setVelocity` can be used together.
+         */
+        virtual void setVelocity(const Vec3f &linear, const Vec3f &angular) = 0;
+
+        /**
          * @brief Set a kinematic target of the Shape.
          * 
-         * This works for both kinematic and dynamic shapes.
+         * This works for both kinematic.
          * Velocity will be automatically calculated based on the current pose
          * and the target.
          */
