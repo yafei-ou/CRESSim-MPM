@@ -154,18 +154,36 @@ namespace crmpm
     {
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((mNumNodes + block.x - 1) / block.x);
-        mlsMpmUpdateGridKernel<<<grid, block, 0, mCudaStream>>>(
-            mIntegrationStepSize,
-            mNumNodes,
-            mGridBound.minimum,
-            mCellSize,
-            mNumNodesPerDim,
-            mNumShapes,
-            mShapeIds, // The data is on GPU
-            *mShapeData,
-            *mGeometryData,
-            *mGeometrySdfData,
-            dmNodeMomentumVelocityMass);
+        if (mShapeContactModel == ShapeContactModel::eKinematic)
+        {
+            mlsMpmUpdateGridKernel<false><<<grid, block, 0, mCudaStream>>>(
+                mIntegrationStepSize,
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mNumShapes,
+                mShapeIds, // The data is on GPU
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
+        else
+        {
+            mlsMpmUpdateGridKernel<true><<<grid, block, 0, mCudaStream>>>(
+                mIntegrationStepSize,
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mNumShapes,
+                mShapeIds, // The data is on GPU
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
     }
 
     void GpuMlsMpmSolver::gridToParticle()
@@ -327,6 +345,7 @@ namespace crmpm
             nodeMomentumVelocityMass);
     }
 
+    template <bool useEffectiveMass>
     CR_CUDA_GLOBAL void mlsMpmUpdateGridKernel(
         const float integrationStepSize,
         const int numNodes,
@@ -344,7 +363,7 @@ namespace crmpm
         if (nodeIdx >= numNodes)
             return;
 
-        mlsMpmUpdateGrid<true>(
+        mlsMpmUpdateGrid<true, useEffectiveMass>(
             integrationStepSize,
             nodeIdx,
             gridBoundMin,

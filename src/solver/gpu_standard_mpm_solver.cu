@@ -115,19 +115,38 @@ namespace crmpm
         int blockSize = 128;
         dim3 block(blockSize);
         dim3 grid((mNumNodes + block.x - 1) / block.x);
-        standardMpmUpdateGridKernel<<<grid, block, 0, mCudaStream>>>(
-            mNumNodes,
-            mGridBound.minimum,
-            mCellSize,
-            mNumNodesPerDim,
-            mIntegrationStepSize,
-            dmNodeForce,
-            mNumShapes,
-            mShapeIds,
-            *mShapeData,
-            *mGeometryData,
-            *mGeometrySdfData,
-            dmNodeMomentumVelocityMass);
+        if (mShapeContactModel == ShapeContactModel::eKinematic)
+        {
+            standardMpmUpdateGridKernel<false><<<grid, block, 0, mCudaStream>>>(
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mIntegrationStepSize,
+                dmNodeForce,
+                mNumShapes,
+                mShapeIds,
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
+        else
+        {
+            standardMpmUpdateGridKernel<true><<<grid, block, 0, mCudaStream>>>(
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mIntegrationStepSize,
+                dmNodeForce,
+                mNumShapes,
+                mShapeIds,
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
     }
 
     void GpuStandardMpmSolver::gridToParticle()
@@ -282,6 +301,7 @@ namespace crmpm
             nodeForce);
     }
 
+    template <bool useEffectiveMass>
     CR_CUDA_GLOBAL void standardMpmUpdateGridKernel(
         const int numNodes,
         const Vec3f gridBoundMin,
@@ -300,7 +320,7 @@ namespace crmpm
         if (nodeIdx >= numNodes)
             return;
 
-        standardMpmUpdateGrid<true>(
+        standardMpmUpdateGrid<true, useEffectiveMass>(
             nodeIdx,
             gridBoundMin,
             cellSize,

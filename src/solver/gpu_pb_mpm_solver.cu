@@ -158,18 +158,36 @@ namespace crmpm
     {
         dim3 block(CR_CUDA_THREADS_PER_BLOCK);
         dim3 grid((mNumNodes + block.x - 1) / block.x);
-        pbMpmUpdateGridKernel<<<grid, block, 0, mCudaStream>>>(
-            mIntegrationStepSize,
-            mNumNodes,
-            mGridBound.minimum,
-            mCellSize,
-            mNumNodesPerDim,
-            mNumShapes,
-            mShapeIds, // The data is on GPU
-            *mShapeData,
-            *mGeometryData,
-            *mGeometrySdfData,
-            dmNodeMomentumVelocityMass);
+        if (mShapeContactModel == ShapeContactModel::eKinematic)
+        {
+            pbMpmUpdateGridKernel<false><<<grid, block, 0, mCudaStream>>>(
+                mIntegrationStepSize,
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mNumShapes,
+                mShapeIds, // The data is on GPU
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
+        else
+        {
+            pbMpmUpdateGridKernel<true><<<grid, block, 0, mCudaStream>>>(
+                mIntegrationStepSize,
+                mNumNodes,
+                mGridBound.minimum,
+                mCellSize,
+                mNumNodesPerDim,
+                mNumShapes,
+                mShapeIds, // The data is on GPU
+                *mShapeData,
+                *mGeometryData,
+                *mGeometrySdfData,
+                dmNodeMomentumVelocityMass);
+        }
     }
 
     void GpuPbMpmSolver::gridToParticle()
@@ -352,6 +370,7 @@ namespace crmpm
             nodeMomentumVelocityMass);
     }
 
+    template <bool useEffectiveMass>
     CR_CUDA_GLOBAL void pbMpmUpdateGridKernel(
         const float integrationStepSize,
         const int numNodes,
@@ -369,7 +388,7 @@ namespace crmpm
         if (nodeIdx >= numNodes)
             return;
 
-        pbMpmUpdateGrid<true>(
+        pbMpmUpdateGrid<true, useEffectiveMass>(
             integrationStepSize,
             nodeIdx,
             gridBoundMin,

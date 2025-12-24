@@ -97,7 +97,8 @@ extern "C"
 
     /* Enums */
 
-    typedef enum CrSceneDataDirtyFlags {
+    typedef enum CrSceneDataDirtyFlags
+    {
         CR_SCENE_DATA_DIRTY_NONE                 = 0,
         CR_SCENE_DATA_DIRTY_PARTICLE_POS_MASS    = 1 << 0,
         CR_SCENE_DATA_DIRTY_PARTICLE_VELOCITY    = 1 << 1,
@@ -114,6 +115,12 @@ extern "C"
             CR_SCENE_DATA_DIRTY_NUM_PARTICLES |
             CR_SCENE_DATA_DIRTY_COMPUTE_INITIAL_DATA
     } CrSceneDataDirtyFlags;
+
+    typedef enum CrShapeContactModel
+    {
+        CR_SHAPE_CONTACT_MODEL_KINEMATIC,
+        CR_SHAPE_CONTACT_MODEL_EFFECTIVE_MASS,
+    } CrShapeContactModel;
 
     /* Engine management */
 
@@ -173,7 +180,8 @@ extern "C"
         CrBounds3 gridBounds,
         float gridCellSize,
         float solverIntegrationStepSize,
-        int solverIterations);
+        int solverIterations,
+        CrShapeContactModel contactModel);
 
     CRMPM_C_API CrShapeHandle CrCreateShape(
         CrGeometryHandle geometry,
@@ -184,7 +192,10 @@ extern "C"
         float sdfFatten,
         float drag,
         float friction,
-        CrVec3f3 invScale);
+        CrVec3f3 invScale,
+        CrVec4f comInvMass,
+        CrVec4f inertiaInv0,
+        CrVec4f inertiaInv1);
 
     CRMPM_C_API CrGeometryHandle CrCreateGeometry(
         CrGeometryType geometryType,

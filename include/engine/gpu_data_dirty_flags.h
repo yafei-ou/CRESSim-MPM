@@ -63,17 +63,21 @@ namespace crmpm
         eShapeRotation = 1 << 3,
         eShapeLinearVelocity = 1 << 4,
         eShapeAngularVelocity = 1 << 5,
-        eShapeScale = 1 << 6,
-        eShapeParams0 = 1 << 7,
-        eShapeForce = 1 << 8,
-        eShapeTorque = 1 << 9,
+        eShapeComInvMass = 1 << 6,
+        eShapeInertia0 = 1 << 7,
+        eShapeInertia1 = 1 << 8,
+        eShapeScale = 1 << 9,
+        eShapeParams0 = 1 << 10,
+        eShapeForce = 1 << 11,
+        eShapeTorque = 1 << 12,
 
-        eGeometryType = 1 << 10,
-        eGeometryParams0 = 1 << 11,
-        eGeometrySdfData = 1 << 12,
+        eGeometryType = 1 << 13,
+        eGeometryParams0 = 1 << 14,
+        eGeometrySdfData = 1 << 15,
 
         eShape = eShapeType | eShapeGeometryIdx | eShapePosition | eShapeRotation | eShapeLinearVelocity |
-                 eShapeAngularVelocity | eShapeParams0 | eShapeScale | eShapeForce | eShapeTorque,
+                 eShapeAngularVelocity | eShapeComInvMass | eShapeInertia0 | eShapeInertia1 | eShapeParams0 |
+                 eShapeScale | eShapeForce | eShapeTorque,
         eGeometry = eGeometryType | eGeometryParams0 | eGeometrySdfData,
 
         eAll = eShape | eGeometry,

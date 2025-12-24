@@ -137,6 +137,7 @@ namespace crmpm
         Vec3f *CR_RESTRICT particleVelocity,
         float4 *CR_RESTRICT nodeMomentumVelocityMass);
 
+    template <bool useEffectiveMass>
     CR_CUDA_GLOBAL void mlsMpmUpdateGridKernel(
         const float integrationStepSize,
         const int numNodes,

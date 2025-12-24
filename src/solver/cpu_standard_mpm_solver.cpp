@@ -121,21 +121,43 @@ namespace crmpm
 
     void CpuStandardMpmSolver::updateGrid()
     {
-        for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+        if (mShapeContactModel == ShapeContactModel::eKinematic)
         {
-            standardMpmUpdateGrid<false>(
-                nodeIdx,
-                mGridBound.minimum,
-                mCellSize,
-                mNumNodesPerDim,
-                mIntegrationStepSize,
-                mGrid->mForce,
-                mNumShapes,
-                mShapeIds,
-                *mShapeData,
-                *mGeometryData,
-                *mGeometrySdfData,
-                mGrid->mMomentumVelocityMass);
+            for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+            {
+                standardMpmUpdateGrid<false, false>(
+                    nodeIdx,
+                    mGridBound.minimum,
+                    mCellSize,
+                    mNumNodesPerDim,
+                    mIntegrationStepSize,
+                    mGrid->mForce,
+                    mNumShapes,
+                    mShapeIds,
+                    *mShapeData,
+                    *mGeometryData,
+                    *mGeometrySdfData,
+                    mGrid->mMomentumVelocityMass);
+            }
+        }
+        else
+        {
+            for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+            {
+                standardMpmUpdateGrid<false, true>(
+                    nodeIdx,
+                    mGridBound.minimum,
+                    mCellSize,
+                    mNumNodesPerDim,
+                    mIntegrationStepSize,
+                    mGrid->mForce,
+                    mNumShapes,
+                    mShapeIds,
+                    *mShapeData,
+                    *mGeometryData,
+                    *mGeometrySdfData,
+                    mGrid->mMomentumVelocityMass);
+            }
         }
     }
 

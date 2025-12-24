@@ -184,7 +184,8 @@ CrSceneHandle CrCreateScene(
     CrBounds3 gridBounds,
     float gridCellSize,
     float solverIntegrationStepSize,
-    int solverIterations)
+    int solverIterations,
+    CrShapeContactModel contactModel)
 {
     CR_DEBUG_LOG_INFO("%s", "Create Scene");
     crmpm::SceneDesc sceneDesc;
@@ -195,6 +196,7 @@ CrSceneHandle CrCreateScene(
     sceneDesc.gridCellSize = gridCellSize;
     sceneDesc.solverIntegrationStepSize = solverIntegrationStepSize;
     sceneDesc.solverIterations = solverIterations;
+    sceneDesc.contactModel = static_cast<crmpm::ShapeContactModel>(contactModel);
 
     return gSimulationFactory->createScene(sceneDesc);
 }
@@ -208,7 +210,10 @@ CrShapeHandle CrCreateShape(
     float sdfFatten,
     float drag,
     float friction,
-    CrVec3f3 invScale)
+    CrVec3f3 invScale,
+    CrVec4f comInvMass,
+    CrVec4f inertiaInv0,
+    CrVec4f inertiaInv1)
 {
     CR_DEBUG_LOG_INFO("%s", "Create Shape");
     crmpm::Transform shapeTransform;
@@ -223,6 +228,10 @@ CrShapeHandle CrCreateShape(
     shapeDesc.drag = drag;
     shapeDesc.friction = friction;
     shapeDesc.invScale = toEngine(invScale);
+
+    shapeDesc.comInvMass = toEngine(comInvMass);
+    shapeDesc.inertiaInv0 = toEngine(inertiaInv0);
+    shapeDesc.inertiaInv1 = toEngine(inertiaInv1);
 
     crmpm::Geometry *cppGeometry = static_cast<crmpm::Geometry *>(geometry);
 

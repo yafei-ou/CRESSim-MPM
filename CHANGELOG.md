@@ -1,3 +1,20 @@
+# v2.2.0
+December 24, 2025
+
+**This version introduces feature-breaking API changes.**
+
+## General
+* Added a different way of computing contact impulse between dynamic shapes and MPM nodes. Particle push-out does not lead to impulse any more.
+This approach is mostly LLM-writen and not well-tested.
+* Added `ShapeContactModel` for controlling which contact method to use for each `Scene`. Use `SceneDesc::contactModel` (default: `ShapeContactModel::eKinematic`).
+This does not affect `ShapeType::eKinematic` and `ShapeType::eStatic` shapes.
+* For all dynamic shapes, `ShapeDesc::comInvMass`, `ShapeDesc::inertiaInv0` and `ShapeDesc::inertiaInv1` should be specified,
+no matter which `ShapeContactModel` is used. if `ShapeContactModel::eKinematic` is used, these added data will not be used.
+
+## API
+* Changed C API functions `CrCreateScene()` and `CrCreateShape()` for setting the contact model and dynamic shape data. Added C API enum `CrShapeContactModel`.
+* Added `MpmSolver::setShapeContactModel()` for setting solver dynamic shape contact model.
+
 # v2.1.0
 December 23, 2025
 

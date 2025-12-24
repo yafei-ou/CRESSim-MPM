@@ -143,20 +143,41 @@ namespace crmpm
 
     void CpuPbMpmSolver::updateGrid()
     {
-        for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+        if (mShapeContactModel == ShapeContactModel::eKinematic)
         {
-            pbMpmUpdateGrid<false>(
-                mIntegrationStepSize,
-                nodeIdx,
-                mGridBound.minimum,
-                mCellSize,
-                mNumNodesPerDim,
-                mNumShapes,
-                mShapeIds,
-                *mShapeData,
-                *mGeometryData,
-                *mGeometrySdfData,
-                mGrid->mMomentumVelocityMass);
+            for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+            {
+                pbMpmUpdateGrid<false, false>(
+                    mIntegrationStepSize,
+                    nodeIdx,
+                    mGridBound.minimum,
+                    mCellSize,
+                    mNumNodesPerDim,
+                    mNumShapes,
+                    mShapeIds,
+                    *mShapeData,
+                    *mGeometryData,
+                    *mGeometrySdfData,
+                    mGrid->mMomentumVelocityMass);
+            }
+        }
+        else
+        {
+            for (int nodeIdx = 0; nodeIdx < mNumNodes; ++nodeIdx)
+            {
+                pbMpmUpdateGrid<false, true>(
+                    mIntegrationStepSize,
+                    nodeIdx,
+                    mGridBound.minimum,
+                    mCellSize,
+                    mNumNodesPerDim,
+                    mNumShapes,
+                    mShapeIds,
+                    *mShapeData,
+                    *mGeometryData,
+                    *mGeometrySdfData,
+                    mGrid->mMomentumVelocityMass);
+            }
         }
     }
 

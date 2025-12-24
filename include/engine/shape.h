@@ -68,6 +68,11 @@ namespace crmpm
         Vec3f *linearVelocity = nullptr;
         Vec3f *angularVelocity = nullptr;
 
+        // CoM + inverse mass; inertia tensor inverse
+        float4 *comInvMass = nullptr;
+        float4 *inertiaInv0 = nullptr;  // diagonal
+        float4 *inertiaInv1 = nullptr;  // off-diagonal
+
         float4 *force;  // Output coupling force
         float4 *torque; // Output coupling torque
 

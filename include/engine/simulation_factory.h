@@ -48,13 +48,14 @@ namespace crmpm
 {
     struct SceneDesc
     {
-        MpmSolverType solverType;                 // MPM solver type
-        unsigned int numMaxParticles;             // Maximum number of particles
-        Vec3f gravity = Vec3f(0, -9.81f, 0);      // Gravity
-        Bounds3 gridBounds;                       // MPM grid bounds
-        float gridCellSize;                       // MPM grid cell size
-        float solverIntegrationStepSize = 0.002f; // Integration step size
-        unsigned int solverIterations = 10;       // Only for PB-MPM: solver iterations
+        MpmSolverType solverType;                                       // MPM solver type
+        unsigned int numMaxParticles;                                   // Maximum number of particles
+        Vec3f gravity = Vec3f(0, -9.81f, 0);                            // Gravity
+        Bounds3 gridBounds;                                             // MPM grid bounds
+        float gridCellSize;                                             // MPM grid cell size
+        float solverIntegrationStepSize = 0.002f;                       // Integration step size
+        unsigned int solverIterations = 10;                             // Only for PB-MPM: solver iterations
+        ShapeContactModel contactModel = ShapeContactModel::eKinematic; // Contact model between MPM and dynamic rigid shapes
     };
 
     struct ShapeDesc
@@ -67,6 +68,10 @@ namespace crmpm
         float sdfFatten = 0.0f;          // SDF fatten distance (fatten the actual distance)
         float drag = 1.0f;               // Drag force, a damping force during contact
         float friction = 0.0f;           // Dynamic friction coefficient
+
+        float4 comInvMass;  // Center of mass + inverse mass
+        float4 inertiaInv0; // Inertia tensor inverse (diagonal component)
+        float4 inertiaInv1; // Inertia tensor inverse (off-diagonal component)
     };
 
     struct ParticleObjectDesc

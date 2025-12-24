@@ -82,6 +82,9 @@ namespace crmpm
         mCpuShapeData.rotation = new Quat[mShapeCapacity];
         mCpuShapeData.linearVelocity = new Vec3f[mShapeCapacity];
         mCpuShapeData.angularVelocity = new Vec3f[mShapeCapacity];
+        mCpuShapeData.comInvMass = new float4[mShapeCapacity];
+        mCpuShapeData.inertiaInv0 = new float4[mShapeCapacity];
+        mCpuShapeData.inertiaInv1 = new float4[mShapeCapacity];
         mCpuShapeData.invScale = new Vec3f[mShapeCapacity];
         mCpuShapeData.params0 = new float4[mShapeCapacity];
 
@@ -119,6 +122,9 @@ namespace crmpm
             CR_CHECK_CUDA(cudaMalloc<Quat>(&mGpuShapeData.rotation, sizeof(Quat) * mShapeCapacity));
             CR_CHECK_CUDA(cudaMalloc<Vec3f>(&mGpuShapeData.linearVelocity, sizeof(Vec3f) * mShapeCapacity));
             CR_CHECK_CUDA(cudaMalloc<Vec3f>(&mGpuShapeData.angularVelocity, sizeof(Vec3f) * mShapeCapacity));
+            CR_CHECK_CUDA(cudaMalloc<float4>(&mGpuShapeData.comInvMass, sizeof(float4) * mShapeCapacity));
+            CR_CHECK_CUDA(cudaMalloc<float4>(&mGpuShapeData.inertiaInv0, sizeof(float4) * mShapeCapacity));
+            CR_CHECK_CUDA(cudaMalloc<float4>(&mGpuShapeData.inertiaInv1, sizeof(float4) * mShapeCapacity));
             CR_CHECK_CUDA(cudaMalloc<Vec3f>(&mGpuShapeData.invScale, sizeof(Vec3f) * mShapeCapacity));
             CR_CHECK_CUDA(cudaMalloc<float4>(&mGpuShapeData.params0, sizeof(float4) * mShapeCapacity));
             CR_CHECK_CUDA(cudaMalloc<float4>(&mGpuShapeData.force, sizeof(float4) * mShapeCapacity));
@@ -161,6 +167,9 @@ namespace crmpm
             delete[] mCpuShapeData.rotation;
             delete[] mCpuShapeData.linearVelocity;
             delete[] mCpuShapeData.angularVelocity;
+            delete[] mCpuShapeData.comInvMass;
+            delete[] mCpuShapeData.inertiaInv0;
+            delete[] mCpuShapeData.inertiaInv1;
             delete[] mCpuShapeData.invScale;
             delete[] mCpuShapeData.params0;
 
@@ -193,6 +202,9 @@ namespace crmpm
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.rotation));
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.linearVelocity));
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.angularVelocity));
+                CR_CHECK_CUDA(cudaFree(mGpuShapeData.comInvMass));
+                CR_CHECK_CUDA(cudaFree(mGpuShapeData.inertiaInv0));
+                CR_CHECK_CUDA(cudaFree(mGpuShapeData.inertiaInv1));
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.invScale));
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.params0));
                 CR_CHECK_CUDA(cudaFree(mGpuShapeData.force));
@@ -388,6 +400,7 @@ namespace crmpm
                 solver->setGravity(desc.gravity);
                 solver->setIntegrationStepSize(desc.solverIntegrationStepSize);
                 solver->setSolverIterations(desc.solverIterations);
+                solver->setShapeContactModel(desc.contactModel);
                 
                 scene = new SceneImpl(desc.numMaxParticles, mShapeCapacity, mCpuParticlePositionMass, mCpuParticleVelocity, particleDataOffset);
                 scene->setFactory(*this);
@@ -428,6 +441,9 @@ namespace crmpm
                 growCpuData(mCpuShapeData.invScale, mShapeCapacity, newCapacity);
                 growCpuData(mCpuShapeData.linearVelocity, mShapeCapacity, newCapacity);
                 growCpuData(mCpuShapeData.angularVelocity, mShapeCapacity, newCapacity);
+                growCpuData(mCpuShapeData.comInvMass, mShapeCapacity, newCapacity);
+                growCpuData(mCpuShapeData.inertiaInv0, mShapeCapacity, newCapacity);
+                growCpuData(mCpuShapeData.inertiaInv1, mShapeCapacity, newCapacity);
                 growCpuData(mCpuShapeData.params0, mShapeCapacity, newCapacity);
 
                 if (mIsGpu)
@@ -440,6 +456,9 @@ namespace crmpm
                     growGpuDataDiscardOld(mGpuShapeData.invScale, newCapacity);
                     growGpuDataDiscardOld(mGpuShapeData.linearVelocity, newCapacity);
                     growGpuDataDiscardOld(mGpuShapeData.angularVelocity, newCapacity);
+                    growGpuDataDiscardOld(mGpuShapeData.comInvMass, newCapacity);
+                    growGpuDataDiscardOld(mGpuShapeData.inertiaInv0, newCapacity);
+                    growGpuDataDiscardOld(mGpuShapeData.inertiaInv1, newCapacity);
                     growGpuDataDiscardOld(mGpuShapeData.params0, newCapacity);
                 }
 
@@ -459,6 +478,9 @@ namespace crmpm
                     mCpuShapeData.rotation[nextShapeId] = shapeDesc.transform.rotation;
                     mCpuShapeData.linearVelocity[nextShapeId] = Vec3f();
                     mCpuShapeData.angularVelocity[nextShapeId] = Vec3f();
+                    mCpuShapeData.comInvMass[nextShapeId] = shapeDesc.comInvMass;
+                    mCpuShapeData.inertiaInv0[nextShapeId] = shapeDesc.inertiaInv0;
+                    mCpuShapeData.inertiaInv1[nextShapeId] = shapeDesc.inertiaInv1;
                     mCpuShapeData.invScale[nextShapeId] = shapeDesc.invScale;
                     mCpuShapeData.params0[nextShapeId] = make_float4(shapeDesc.sdfSmoothDistance, shapeDesc.drag, shapeDesc.friction, shapeDesc.sdfFatten);
 
@@ -889,6 +911,12 @@ namespace crmpm
                 CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.linearVelocity, mCpuShapeData.linearVelocity, mShapeCapacity * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyHostToDevice));
             if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeAngularVelocity)
                 CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.angularVelocity, mCpuShapeData.angularVelocity, mShapeCapacity * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeComInvMass)
+                CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.comInvMass, mCpuShapeData.comInvMass, mShapeCapacity * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeInertia0)
+                CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.inertiaInv0, mCpuShapeData.inertiaInv0, mShapeCapacity * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice));
+            if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeInertia1)
+                CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.inertiaInv1, mCpuShapeData.inertiaInv1, mShapeCapacity * sizeof(float4), cudaMemcpyKind::cudaMemcpyHostToDevice));
             if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeScale)
                 CR_CHECK_CUDA(cudaMemcpy(mGpuShapeData.invScale, mCpuShapeData.invScale, mShapeCapacity * sizeof(Vec3f), cudaMemcpyKind::cudaMemcpyHostToDevice));
             if (mGpuDataDirtyFlags & SimulationFactoryGpuDataDirtyFlags::eShapeParams0)

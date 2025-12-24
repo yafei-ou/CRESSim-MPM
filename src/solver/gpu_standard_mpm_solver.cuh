@@ -121,6 +121,7 @@ namespace crmpm
         float4 *CR_RESTRICT nodeMomentumVelocityMass,
         Vec3f *CR_RESTRICT nodeForce);
 
+    template <bool useEffectiveMass>
     CR_CUDA_GLOBAL void standardMpmUpdateGridKernel(
         const int numNodes,
         const Vec3f gridBoundMin,

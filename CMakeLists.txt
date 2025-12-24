@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.18)
-project(CRESSIM_MPM VERSION 2.1.0 LANGUAGES C CXX CUDA)
+project(CRESSIM_MPM VERSION 2.2.0 LANGUAGES C CXX CUDA)
 
 set(PROJECT_VENDOR "Yafei Ou")
 set(PROJECT_DESCRIPTION "CRESSim-MPM: A Material Point Method Library for Surgical Soft Body Simulation with Cutting and Suturing")

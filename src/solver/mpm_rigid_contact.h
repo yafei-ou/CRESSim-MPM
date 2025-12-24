@@ -81,12 +81,24 @@ namespace crmpm
         }
     }
 
+    CR_FORCE_INLINE CR_CUDA_HOST CR_CUDA_DEVICE Vec3f mulSymmetricInertiaInvLocal(
+        const Vec3f &v,
+        const float4 &diag,    // inertiaInv0: (Ixx, Iyy, Izz, _)
+        const float4 &offdiag) // inertiaInv1: (Ixy, Ixz, Iyz, _)
+    {
+        Vec3f r;
+        r.x() = diag.x * v.x() + offdiag.x * v.y() + offdiag.y * v.z(); // Ixx vx + Ixy vy + Ixz vz
+        r.y() = offdiag.x * v.x() + diag.y * v.y() + offdiag.z * v.z(); // Ixy vx + Iyy vy + Iyz vz
+        r.z() = offdiag.y * v.x() + offdiag.z * v.y() + diag.z * v.z(); // Ixz vx + Iyz vy + Izz vz
+        return r;
+    }
+
     /**
      * Modify the velocity if inputPosition is inside a shape.
      * If IsParticle = true, inputPosition will be pushed to the 
      * nearest shape boundary (used for particles)
      */
-    template <bool IsParticle, bool IsCuda>
+    template <bool IsParticle, bool IsCuda, bool UseEffectiveMass = false>
     CR_FORCE_INLINE CR_CUDA_HOST CR_CUDA_DEVICE void resolveRigidCollision(
         float4 &inputVelocity,
         float4 &inputPosition,
@@ -137,12 +149,9 @@ namespace crmpm
             // Local position
             const Vec3f _shapePosition = shapePosition[_shapeId];
             const Quat _shapeRotation = shapeRotation[_shapeId];
-            Vec3f worldRelativePositionn = inputPosition - _shapePosition;
-            Vec3f relativePosition = _shapeRotation.rotateInv(worldRelativePositionn);
+            Vec3f worldRelativePosition = inputPosition - _shapePosition;
+            Vec3f relativePosition = _shapeRotation.rotateInv(worldRelativePosition);
             Vec3f localPosition = relativePosition * _shapeInvScale; // inverse scale to local position
-
-            // Node velocity correction based on rigid contact
-            Vec3f rigidVelocity = _shapeType == ShapeType::eStatic ? Vec3f() : computeVelocityAtRigidBody(shapeLinearVelocity[_shapeId], shapeAngularVelocity[_shapeId], worldRelativePositionn);
 
             float4 sdfGradientDistance;
             Vec3f tangentDirection;
@@ -158,16 +167,6 @@ namespace crmpm
             distance = distance * invScale;
             gradient = gradient * invScale;
 
-            float friction;
-            if (onSpine)
-            {
-                friction = 1e2; // Large friction to ensure sticking response for a slicer spine
-            }
-            else
-            {
-                friction = shapeParams0[_shapeId].z;
-            }
-
             distance -= shapeParams0[_shapeId].w; // fatten SDF size
 
             float smoothDistance = 0;
@@ -180,10 +179,12 @@ namespace crmpm
             {
                 Vec3f normal = _shapeRotation.rotate(gradient);
 
+                // Node velocity correction based on rigid contact
+                Vec3f rigidVelocity = _shapeType == ShapeType::eStatic ? Vec3f() : computeVelocityAtRigidBody(shapeLinearVelocity[_shapeId], shapeAngularVelocity[_shapeId], worldRelativePosition);
                 Vec3f relativeVelocity = inputVelocity - rigidVelocity;
-                float normalVelocity = relativeVelocity.dot(normal);;
+                float normalVelocity = relativeVelocity.dot(normal);
                 Vec3f normalComponent = normal * normalVelocity;
-                
+
                 if constexpr (IsParticle)
                 {
                     // For particles, push out if inside the rigid shape.
@@ -197,51 +198,202 @@ namespace crmpm
                     inputPosition.y -= correctedPosition.y();
                     inputPosition.z -= correctedPosition.z();
                 }
-
-                // Skip if they are separating
-                if (normalVelocity >= 0)
+                else
                 {
-                    continue;
-                }
-
-                // Apply velocity correction
-                Vec3f tangentialComponent = relativeVelocity - normalComponent;
-                Vec3f collisionResponse;
-                const float stickyScale = shapeParams0[_shapeId].y; // A damping coefficient
-
-                // For line segments, we only allow motion along the line
-                if (_geomType == GeometryType::eConnectedLineSegments || _geomType == GeometryType::eArc)
-                {
-                    tangentDirection *= _shapeInvScale;
-                    tangentDirection.normalize();
-                    tangentDirection = _shapeRotation.rotate(tangentDirection);
-                    tangentialComponent = tangentDirection * tangentialComponent.dot(tangentDirection);
-                }
-
-                // v = v_t + mu * v_n * vt / norm(v_t)
-                float tangentNorm = tangentialComponent.norm();
-                float frictionCorrection = fmaxf(friction * normalVelocity / (tangentNorm + CR_EPS), -1);
-
-                collisionResponse = tangentialComponent + tangentialComponent * frictionCorrection;
-                collisionResponse *= stickyScale;
-                collisionResponse += rigidVelocity;
-
-                if constexpr (!IsParticle)
-                {
-                    if (_shapeType == ShapeType::eDynamic)
+                    // Skip if separating
+                    if (normalVelocity >= 0.0f)
                     {
-                        float4 *CR_RESTRICT shapeCouplingForce = shapeData.force;
-                        float4 *CR_RESTRICT shapeCouplingTorque = shapeData.torque;
-                        // Rigid coupling when set as dynamic
-                        Vec3f momentumChange = inputVelocity - collisionResponse;
-                        momentumChange *= inputVelocity.w; // At the grid level, input is velocity mass
-                        addMomentumToRigidBody<IsCuda>(momentumChange, inputPosition - _shapePosition, shapeCouplingForce[_shapeId], shapeCouplingTorque[_shapeId]);
+                        continue;
                     }
-                }
 
-                inputVelocity.x = collisionResponse.x();
-                inputVelocity.y = collisionResponse.y();
-                inputVelocity.z = collisionResponse.z();
+                    float friction;
+                    if (onSpine)
+                    {
+                        friction = 1e2; // Large friction to ensure sticking response for a slicer spine
+                    }
+                    else
+                    {
+                        friction = shapeParams0[_shapeId].z;
+                    }
+
+                    if constexpr (UseEffectiveMass)
+                    {
+                        const float4 *CR_RESTRICT shapeComInvMass = shapeData.comInvMass;
+                        const float4 *CR_RESTRICT shapeInertiaInv0 = shapeData.inertiaInv0;
+                        const float4 *CR_RESTRICT shapeInertiaInv1 = shapeData.inertiaInv1;
+
+                        // ------------------------------------------------------------------
+                        // Mostly LLM implementation. Not very sure about correctness.
+                        // Normal direction: two-body impulse for dynamic shapes
+                        // Tangential: use original velocity
+                        // ------------------------------------------------------------------
+
+                        Vec3f collisionResponse;
+
+                        // Grid node mass (stored in w)
+                        const float gridMass = inputVelocity.w;
+
+                        if (_shapeType == ShapeType::eDynamic)
+                        {
+                            float4 *CR_RESTRICT shapeCouplingForce = shapeData.force;
+                            float4 *CR_RESTRICT shapeCouplingTorque = shapeData.torque;
+
+                            // Rigid mass from comInvMass: xyz = CoM, w = invMass
+                            const float4 comInvMass = shapeComInvMass[_shapeId];
+                            const float invMassRigid = comInvMass.w;
+                            const float rigidMass = invMassRigid > 0.0f ? 1.0f / invMassRigid : 0.0f;
+
+                            if (rigidMass > 0.0f)
+                            {
+                                // r = contact point relative to rigid COM
+                                const Vec3f r = worldRelativePosition - _shapeRotation.rotate(comInvMass); // For dynamic parameters we never consider the scale
+
+                                // r × n in world space
+                                Vec3f r_cross_n = r.cross(normal);
+
+                                Vec3f r_cross_n_local = _shapeRotation.rotateInv(r_cross_n);
+
+                                // Apply local inverse inertia
+                                const float4 inertia0 = shapeInertiaInv0[_shapeId];
+                                const float4 inertia1 = shapeInertiaInv1[_shapeId];
+                                Vec3f w_local = mulSymmetricInertiaInvLocal(r_cross_n_local, inertia0, inertia1);
+
+                                // Back to world space: R * w_local
+                                Vec3f w_world = _shapeRotation.rotate(w_local);
+
+                                // (I^{-1}(r×n)) × r
+                                Vec3f t = w_world.cross(r);
+
+                                // Effective inverse mass of rigid along normal
+                                float invMassRigidNormal = invMassRigid + normal.dot(t);
+
+                                // Combined inverse mass
+                                float invMassGrid = 1.0f / gridMass;
+                                float invMassCombined = invMassGrid + invMassRigidNormal;
+
+                                if (invMassCombined > 0.0f)
+                                {
+                                    // normal impulse
+                                    float Jn = -1.0f * normalVelocity / invMassCombined;
+                                    Vec3f impulseN = normal * Jn;
+
+                                    // relative tangential velocity before the normal update
+                                    Vec3f vt_orig = relativeVelocity - (normal * normalVelocity);
+                                    float vt_norm = vt_orig.norm();
+
+                                    Vec3f impulseT(0, 0, 0);
+                                    if (vt_norm > CR_EPS)
+                                    {
+                                        // TODO: using invMassCombined for tangential is probably incorrect
+
+                                        // impulse required to stop all sliding
+                                        float stoppingJt = vt_norm / invMassCombined;
+
+                                        // Coulomb friction limit
+                                        float maxFrictionJt = friction * Jn;
+
+                                        // Velocity after friction but before linear scaling
+                                        float frictionJt = fminf(maxFrictionJt, stoppingJt);
+                                        float leftoverVelMag = vt_norm - (frictionJt * invMassCombined);
+
+                                        // additional linear scaling (drag) to the leftover velocity
+                                        // if stickyScale is 0.9, we keep 90% of the remaining slide.
+                                        const float stickyScale = shapeParams0[_shapeId].y;
+                                        float finalVelMag = leftoverVelMag * stickyScale;
+
+                                        // total tangential impulse needed to reach finalVelMag
+                                        float totalJt = (vt_norm - finalVelMag) / invMassCombined;
+
+                                        impulseT = (vt_orig * -1.0f / vt_norm) * totalJt;
+                                    }
+
+                                    Vec3f totalImpulse = impulseN + impulseT;
+                                    collisionResponse = inputVelocity + (totalImpulse * invMassGrid);
+
+                                    addMomentumToRigidBody<IsCuda>(
+                                        totalImpulse * -1.0f, // Equal and opposite direction
+                                        r,                    // local pos relative to COM (we already used world r)
+                                        shapeCouplingForce[_shapeId],
+                                        shapeCouplingTorque[_shapeId]);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Apply velocity correction
+                            Vec3f tangentialComponent = relativeVelocity - normalComponent;
+                            const float stickyScale = shapeParams0[_shapeId].y; // A damping coefficient
+
+                            // For line segments, we only allow motion along the line
+                            if (_geomType == GeometryType::eConnectedLineSegments || _geomType == GeometryType::eArc)
+                            {
+                                tangentDirection *= _shapeInvScale;
+                                tangentDirection.normalize();
+                                tangentDirection = _shapeRotation.rotate(tangentDirection);
+                                tangentialComponent = tangentDirection * tangentialComponent.dot(tangentDirection);
+                            }
+
+                            // v = v_t + mu * v_n * vt / norm(v_t)
+                            float tangentNorm = tangentialComponent.norm();
+                            float frictionCorrection = fmaxf(friction * normalVelocity / (tangentNorm + CR_EPS), -1);
+
+                            collisionResponse = tangentialComponent + tangentialComponent * frictionCorrection;
+                            collisionResponse *= stickyScale;
+                            collisionResponse += rigidVelocity;
+                        }
+
+                        inputVelocity.x = collisionResponse.x();
+                        inputVelocity.y = collisionResponse.y();
+                        inputVelocity.z = collisionResponse.z();
+                    }
+
+                    else
+                    {
+                        // ------------------------------------------------------------------
+                        // View the rigid body as kinematic
+                        // ------------------------------------------------------------------
+
+                        // Apply velocity correction
+                        Vec3f tangentialComponent = relativeVelocity - normalComponent;
+                        Vec3f collisionResponse;
+                        const float stickyScale = shapeParams0[_shapeId].y; // A damping coefficient
+
+                        // For line segments, we only allow motion along the line
+                        if (_geomType == GeometryType::eConnectedLineSegments || _geomType == GeometryType::eArc)
+                        {
+                            tangentDirection *= _shapeInvScale;
+                            tangentDirection.normalize();
+                            tangentDirection = _shapeRotation.rotate(tangentDirection);
+                            tangentialComponent = tangentDirection * tangentialComponent.dot(tangentDirection);
+                        }
+
+                        // v = v_t + mu * v_n * vt / norm(v_t)
+                        float tangentNorm = tangentialComponent.norm();
+                        float frictionCorrection = fmaxf(friction * normalVelocity / (tangentNorm + CR_EPS), -1);
+
+                        collisionResponse = tangentialComponent + tangentialComponent * frictionCorrection;
+                        collisionResponse *= stickyScale;
+                        collisionResponse += rigidVelocity;
+
+                        if constexpr (!IsParticle)
+                        {
+                            if (_shapeType == ShapeType::eDynamic)
+                            {
+                                float4 *CR_RESTRICT shapeCouplingForce = shapeData.force;
+                                float4 *CR_RESTRICT shapeCouplingTorque = shapeData.torque;
+                                // Rigid coupling when set as dynamic
+                                Vec3f momentumChange = inputVelocity - collisionResponse;
+                                momentumChange *= inputVelocity.w; // At the grid level, input is velocity mass
+                                addMomentumToRigidBody<IsCuda>(momentumChange, inputPosition - _shapePosition, shapeCouplingForce[_shapeId], shapeCouplingTorque[_shapeId]);
+                            }
+                        }
+
+                        inputVelocity.x = collisionResponse.x();
+                        inputVelocity.y = collisionResponse.y();
+                        inputVelocity.z = collisionResponse.z();
+                    }
+
+                }
             }
         }
     }

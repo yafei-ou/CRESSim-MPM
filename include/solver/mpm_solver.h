@@ -42,6 +42,12 @@
 
 namespace crmpm
 {
+    enum class ShapeContactModel
+    {
+        eKinematic,
+        eEffectiveMass,
+    };
+
     enum class MpmSolverType
     {
         eCpuMlsMpmSolver,
@@ -164,6 +170,20 @@ namespace crmpm
          * data for their underlining SDF geometry data.
          */
         virtual void bindGeometrySdfData(GeometrySdfData &geometrySdfData) = 0;
+
+        /**
+         * Set `ShapeContactModel` for this solver.
+         * 
+         * `ShapeContactModel::eKinematic` is the used by default. This method views dynamic
+         * rigid bodies as kinematic when resolving contact response.
+         * 
+         * `ShapeContactModel::eEffectiveMass` is experimental and can give incorrect results.
+         * This method calculates the effective mass at the grid node when it is in contact
+         * with a dynamic rigid body.
+         * 
+         * This setting does not affect static and kinematic shapes.
+         */
+        virtual void setShapeContactModel(ShapeContactModel shapeContactModel) = 0;
 
     protected:
         MpmSolver() {}

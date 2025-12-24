@@ -109,7 +109,7 @@ int main()
     auto solverIntegrationStepSize = 0.002f;
     auto solverIterations = 20;
 
-    CrSceneHandle scene = CrCreateScene(solverType, 4000, gravity, gridBounds, gridCellSize, solverIntegrationStepSize, solverIterations);
+    CrSceneHandle scene = CrCreateScene(solverType, 4000, gravity, gridBounds, gridCellSize, solverIntegrationStepSize, solverIterations, CrShapeContactModel::CR_SHAPE_CONTACT_MODEL_KINEMATIC);
 
     // Except for PB-MPM, compute Lame parameters
     constexpr float E = 5e5f;  // Young's modulus

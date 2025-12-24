@@ -134,6 +134,11 @@ namespace crmpm
             mGeometrySdfData = &geometrySdfData;
         };
 
+        void setShapeContactModel(ShapeContactModel shapeContactModel) override
+        {
+            mShapeContactModel = shapeContactModel;
+        }
+
     protected:
         // Integration step
         float mIntegrationStepSize = 0.002; // 0.001 if we need E = 1e8 (density ~6000)
@@ -156,6 +161,9 @@ namespace crmpm
         ShapeData *mShapeData;
         GeometryData *mGeometryData;
         GeometrySdfData *mGeometrySdfData;
+
+        // Rigid body contact model
+        ShapeContactModel mShapeContactModel = ShapeContactModel::eKinematic;
 
         virtual void resetGrid() = 0;
         virtual void particleToGrid() = 0;

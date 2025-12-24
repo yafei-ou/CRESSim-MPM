@@ -240,7 +240,7 @@ namespace crmpm
         }
     }
 
-    template <bool IsCuda>
+    template <bool IsCuda, bool UseEffectiveMass>
     CR_FORCE_INLINE CR_CUDA_HOST CR_CUDA_DEVICE void mlsMpmUpdateGrid(
         const float integrationStepSize,
         const int nodeIdx,
@@ -274,7 +274,7 @@ namespace crmpm
         // TODO: this can use shared memory
         Vec3f nodePosition = Vec3f(i * cellSize, j * cellSize, k * cellSize) + gridBoundMin;
         nodePosition += nodeMomentumVelocityMass[nodeIdx] * integrationStepSize;
-        resolveRigidCollision<false, IsCuda>(
+        resolveRigidCollision<false, IsCuda, UseEffectiveMass>(
             nodeMomentumVelocityMass[nodeIdx],
             nodePosition.data,
             numShapes,
@@ -376,7 +376,7 @@ namespace crmpm
 
         // Particle-level collision response, in case particles are inside a shape.
         // Most of the collision resolution has been done at grid level.
-        resolveRigidCollision<true, IsCuda>(
+        resolveRigidCollision<true, IsCuda, false>(
             particleVelocity.data,
             particlePositionMass,
             numShapes,
